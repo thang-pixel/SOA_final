@@ -7,7 +7,7 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: 'http://localhost:5173',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
@@ -19,53 +19,50 @@ mongoose.connect(process.env.MONGO_URI, {
     .catch(err => console.log(err));
 
 const authSchema = new mongoose.Schema({
-    studentId: { type: String, required: true, unique: true },
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     email: { type: String, required: true },
+    role : { type: String, required: true },
 });
+
+
+
 
 const auth = mongoose.model('Auth', authSchema);
 
 
+// API đăng nhập
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
 
-// API đăng ký
-app.post('/register', async (req, res) => {
-  const { studentId, username, password, email, fullName, phone } = req.body;
   try {
-    // Kiểm tra trùng username hoặc studentId
-    const existed = await auth.findOne({ $or: [{ username }, { studentId }] });
-    if (existed) {
-      return res.status(400).json({ message: 'Username hoặc studentId đã tồn tại' });
+    const user = await auth.findOne({ username, password });
+    console.log("User found:", user); 
+    if (!user) {
+      return res.status(401).json({ message: 'tài khoản hoặc mật khẩu không chính xác' });
     }
 
-    // Tạo tài khoản auth
-    const newAuth = new auth({ studentId, username, password, email });
-    await newAuth.save();
-
-    // Tạo user ở user-service
-    await axios.post('http://user-service:3002/users/add', {
-      studentId,
-      fullName,
-      phone,
-      email,
-      balance: 50000000
+    const token = jwt.sign(
+      { username: user.username },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+    const userObj = user.toObject();
+    delete userObj.password;
+    res.json({
+      message: 'Login successful',
+      token,
+      user: userObj,
     });
-
-    // Tạo học phí ở tuition-service
-    await axios.post('http://tuition-service:3005/tuitions/add', {
-      studentId,
-      tuitionAmount: 5000000,
-      duedate: new Date(Date.now() + 30*24*60*60*1000), // hạn 30 ngày
-      status: 'unpaid'
-    });
-
-    res.json({ message: 'Đăng ký thành công' });
   } catch (error) {
-    console.error('Register error:', error);
+    console.error('Login error:', error.message);
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+
+
+
 
 
 
@@ -75,22 +72,24 @@ app.post('/login', async (req, res) => {
 
   try {
     const user = await auth.findOne({ username, password });
-    console.log("User found:", user); // Xem user có studentId không
+    console.log("User found:", user); 
     if (!user) {
       return res.status(401).json({ message: 'tài khoản hoặc mật khẩu không chính xác' });
     }
 
     const token = jwt.sign(
-      { studentId: user.studentId },
+      { username: user.username },
       process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
     console.log("Token created:", token);
     console.log("Decoded token:", jwt.decode(token));
+    const userObj = user.toObject();
+    delete userObj.password;
     res.json({
       message: 'Login successful',
       token,
-      studentId: user.studentId,
+      user: userObj,
     });
   } catch (error) {
     console.error('Login error:', error.message);
