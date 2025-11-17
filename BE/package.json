@@ -6,7 +6,8 @@
   "scripts": {
     "start:auth": "cd auth-service && npm install && npm run dev",
     "start:gateway": "cd api-gateway && npm install && npm run dev",
-    "start:all": "concurrently \"npm run start:auth\" \"npm run start:user\" \"npm run start:notification\" \"npm run start:payment\" \"npm run start:tuition\" \"npm run start:gateway\""
+    "start:inventory": "cd inventory-service && npm install && npm run dev",
+    "start:all": "concurrently \"npm run start:auth\" \"npm run start:gateway\" \"npm run start:inventory\""
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

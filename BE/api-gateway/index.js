@@ -27,5 +27,15 @@ app.get('/', (req, res) => {
   res.json({ message: 'API Gateway is running' });
 });
 
+//proxy cho inventory-service
+app.use('/api/inventory', createProxyMiddleware({
+  target: process.env.INVENTORY_SERVICE_URL || 'http://localhost:3002',
+  changeOrigin: true,
+  pathRewrite: {
+    '^/api/inventory': '',   // xoá "/api/inventory"
+  },
+  logLevel: 'debug'
+}));
+
 const PORT = process.env.PORT || 2000;
 app.listen(PORT, () => console.log(` API Gateway running on port ${PORT}`));
