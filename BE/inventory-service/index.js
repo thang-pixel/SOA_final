@@ -26,7 +26,7 @@ mongoose.connect(process.env.MONGO_URI, {
     .catch(err => console.log(err));
 
 const inventorySchema = new mongoose.Schema({
-    code: { type: String, required: true, unique: true },         // Mã hàng
+  code: { type: String, required: true, unique: true },         // Mã hàng
   name: { type: String, required: true },                       // Tên hàng
   price: { type: Number, required: true },                      // Giá bán
   cost: { type: Number, required: true },                       // Giá vốn
@@ -36,6 +36,7 @@ const inventorySchema = new mongoose.Schema({
   expectedOutOfStock: { type: Date },                           // Dự kiến hết hàng
   image: { type: String  },                                      // Ảnh sản phẩm
   category: { type: String  },                                   // Loại sản phẩm
+  supplier: { type: String  },                                   // Nhà cung cấp
 });
 
 
@@ -81,6 +82,26 @@ app.get('/img', (req, res) => {
   });
 });
 
+//API chỉnh sửa hàng tồn kho
+app.put('/product/update/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updatedItem = await inventory.findByIdAndUpdate(
+            id, 
+            req.body, 
+            { new: true, runValidators: true }
+        );
+        
+        if (!updatedItem) {
+            return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+        }
+        
+        res.json(updatedItem);
+    } catch (error) {
+        console.error('Error updating inventory item:', error);
+        res.status(500).json({ message: 'Lỗi server', error: error.message });
+    }
+});
 const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => {
     console.log(`Inventory service running on port ${PORT}`);
