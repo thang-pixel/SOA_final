@@ -102,6 +102,34 @@ app.put('/product/update/:id', async (req, res) => {
         res.status(500).json({ message: 'Lỗi server', error: error.message });
     }
 });
+
+
+
+// API cập nhật tồn kho
+app.put('/product/update-stock/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { quantity, operation } = req.body; // operation: 'increase' hoặc 'decrease'
+        
+        const product = await inventory.findById(id);
+        if (!product) {
+            return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+        }
+        
+        if (operation === 'increase') {
+            product.stock += quantity;
+        } else if (operation === 'decrease') {
+            product.stock = Math.max(0, product.stock - quantity);
+        }
+        
+        await product.save();
+        res.json(product);
+    } catch (error) {
+        console.error('Error updating stock:', error);
+        res.status(500).json({ message: 'Lỗi cập nhật tồn kho', error: error.message });
+    }
+});
+
 const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => {
     console.log(`Inventory service running on port ${PORT}`);

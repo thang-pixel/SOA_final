@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { setItems, setLoading, setError } from '../reducers/inventorySlice';
 import API_DOMAIN from "../../constants/apiDomain";
-
+import { createImportOrder } from './orderAction';
 export const fetchInventoryItems = () => async (dispatch) => {
   try {
     dispatch(setLoading(true));

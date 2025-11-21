@@ -3,6 +3,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchInventoryItems } from '../../../redux/action/inventory';
 import { setSearchFilter, setStockFilter } from '../../../redux/reducers/inventorySlice';
 import AddProductPopup from '../../../components/AddProductPopup';
+import { useNavigate } from 'react-router-dom';
+import { createImportOrder } from '../../../redux/action/orderAction'; 
 import {
   Box,
   Paper,
@@ -34,8 +36,8 @@ import {
   TrendingDown as TrendingDownIcon,
   Warning as WarningIcon,
   Print as PrintIcon,
-  QrCode as QrCodeIcon,
-  Download as DownloadIcon
+  Download as DownloadIcon,
+  Business as BusinessIcon
 } from '@mui/icons-material';
 
 // Memoized components for statistics cards
@@ -58,6 +60,8 @@ const StatCard = React.memo(({ title, value, icon, color = "primary" }) => (
     </CardContent>
   </Card>
 ));
+
+
 
 // Memoized cell renderers
 const ImageCell = React.memo(({ src, alt }) => (
@@ -93,6 +97,16 @@ const CategoryChip = React.memo(({ value }) => (
   />
 ));
 
+const SupplierChip = React.memo(({ value }) => (
+  <Chip 
+    label={value || 'Chưa có'} 
+    size="small" 
+    variant="outlined"
+    color="secondary"
+    icon={<BusinessIcon fontSize="small" />}
+  />
+));
+
 const PriceCell = React.memo(({ value, color = "text.primary" }) => (
   <Typography variant="body2" color={color} fontWeight={color === "success.main" ? 600 : 400}>
     {value.toLocaleString('vi-VN')}đ
@@ -122,10 +136,29 @@ const StockChip = React.memo(({ stock }) => {
 
 const DateCell = React.memo(({ value }) => {
   const formattedDate = useMemo(() => {
-    return value ? new Date(value).toLocaleDateString('vi-VN') : '';
+    if (!value) return '';
+    
+    // Xử lý cả Date object và string
+    const date = value instanceof Date ? value : new Date(value);
+    
+    // Kiểm tra xem date có hợp lệ không
+    if (isNaN(date.getTime())) return '';
+    
+    // Format theo định dạng Việt Nam: dd/mm/yyyy hh:mm
+    return date.toLocaleString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   }, [value]);
 
-  return <span>{formattedDate}</span>;
+  return (
+    <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+      {formattedDate}
+    </Typography>
+  );
 });
 
 // Component hiển thị nút actions khi có selection
@@ -199,17 +232,20 @@ function Inventory() {
   const [openPopup, setOpenPopup] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [selectionModel, setSelectionModel] = useState([]);
-
+  const navigate = useNavigate();
   useEffect(() => {
     dispatch(fetchInventoryItems());
   }, [dispatch]);
 
-  // Memoized filtered items - DI CHUYỂN LÊN TRƯỚC CÁC CALLBACK
+  
+
+  // Memoized filtered items
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       const matchSearch = 
         item.name.toLowerCase().includes(filters.search.toLowerCase()) ||
-        item.code.toLowerCase().includes(filters.search.toLowerCase());
+        item.code.toLowerCase().includes(filters.search.toLowerCase()) ||
+        (item.supplier && item.supplier.toLowerCase().includes(filters.search.toLowerCase()));
       
       let matchStock = true;
       if (filters.stockStatus === 'in-stock') {
@@ -258,7 +294,7 @@ function Inventory() {
     setSelectionModel(newSelection);
   }, []);
 
-  // Action handlers cho selection - BÂY GIỜ CÓ THỂ SỬ DỤNG filteredItems
+  // Action handlers cho selection
   const handleExportSelected = useCallback(() => {
     const selectedItems = filteredItems.filter(item => selectionModel.includes(item._id));
     console.log('Xuất file cho các sản phẩm:', selectedItems);
@@ -272,10 +308,16 @@ function Inventory() {
   }, [selectionModel, filteredItems]);
 
   const handleImportSelected = useCallback(() => {
-    const selectedItems = filteredItems.filter(item => selectionModel.includes(item._id));
-    console.log('Nhập hàng cho các sản phẩm:', selectedItems);
-    // TODO: Implement import functionality
-  }, [selectionModel, filteredItems]);
+  const selectedItems = filteredItems.filter(item => selectionModel.includes(item._id));
+  
+  if (selectedItems.length === 0) {
+    alert('Vui lòng chọn ít nhất một sản phẩm');
+    return;
+  }
+  
+  dispatch(createImportOrder(selectedItems));
+  navigate('/user/order');
+}, [selectionModel, filteredItems, dispatch, navigate]);
 
   const handleImport = useCallback(() => {
     console.log('Import file');
@@ -314,7 +356,7 @@ function Inventory() {
     {
       field: 'code',
       headerName: 'Mã hàng',
-      width: 140,
+      width: 130,
       headerAlign: 'center',
       align: 'center',
     },
@@ -322,21 +364,29 @@ function Inventory() {
       field: 'name',
       headerName: 'Tên hàng',
       flex: 1,
-      minWidth: 200,
+      minWidth: 180,
       headerAlign: 'center',
     },
     {
       field: 'category',
       headerName: 'Danh mục',
-      width: 150,
+      width: 130,
       headerAlign: 'center',
       align: 'center',
       renderCell: (params) => <CategoryChip value={params.value} />,
     },
     {
+      field: 'supplier',
+      headerName: 'Nhà cung cấp',
+      width: 150,
+      headerAlign: 'center',
+      align: 'center',
+      renderCell: (params) => <SupplierChip value={params.value} />,
+    },
+    {
       field: 'price',
       headerName: 'Giá bán',
-      width: 130,
+      width: 120,
       type: 'number',
       headerAlign: 'center',
       align: 'center',
@@ -345,7 +395,7 @@ function Inventory() {
     {
       field: 'cost',
       headerName: 'Giá vốn',
-      width: 130,
+      width: 120,
       type: 'number',
       headerAlign: 'center',
       align: 'center',
@@ -354,7 +404,7 @@ function Inventory() {
     {
       field: 'stock',
       headerName: 'Tồn kho',
-      width: 120,
+      width: 100,
       type: 'number',
       headerAlign: 'center',
       align: 'center',
@@ -363,12 +413,10 @@ function Inventory() {
     {
       field: 'createdAt',
       headerName: 'Ngày tạo',
-      width: 130,
-      type: 'dateTime',
+      width: 140,
       headerAlign: 'center',
       align: 'center',
-      valueGetter: (params) => params.value ? new Date(params.value) : null,
-      renderCell: (params) => <DateCell value={params.value} />,
+      renderCell: (params) => <DateCell value={params.row.createdAt} />,
     },
   ], []);
 
@@ -457,7 +505,7 @@ function Inventory() {
           <Grid item xs={12} md={4}>
             <TextField
               fullWidth
-              placeholder="Tìm theo mã hàng, tên sản phẩm..."
+              placeholder="Tìm theo mã hàng, tên sản phẩm, nhà cung cấp..."
               value={filters.search}
               onChange={handleSearch}
               InputProps={{

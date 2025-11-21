@@ -5,6 +5,8 @@ import { Navigate } from "react-router-dom";
 import PrivateRoute from "./PrivateRoute";
 import UserLayout from "../layout/User/UserLayout";
 import Inventory from "../pages/user/inventory";
+import ImportOrder from "../pages/user/order"; // Thêm import
+import OrderManager from "../pages/user/order-manager";
 function UserRoute() {
   return (
     <Routes>
@@ -13,10 +15,11 @@ function UserRoute() {
           <Route index element={<Home />} />
           <Route path="home" element={<Home />} />
           <Route path="inventory" element={<Inventory />} />
+          <Route path="user/order" element={<ImportOrder />} />
+          <Route path="order" element={<OrderManager />} />
         </Route>
       </Route>
     </Routes>
-
   );
 }
 

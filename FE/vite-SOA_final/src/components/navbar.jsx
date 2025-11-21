@@ -44,7 +44,7 @@ const menuItems = [
   {
     text: 'Quản lý Đơn hàng',
     icon: <OrderIcon />,
-    path: '/orders',
+    path: '/order',
     description: 'Phiếu nhập/xuất, đơn hàng'
   },
   {

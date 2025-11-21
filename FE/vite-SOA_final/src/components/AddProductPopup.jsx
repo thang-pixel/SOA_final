@@ -22,6 +22,7 @@ import {
   Alert,
   Paper,
   Chip,
+  Autocomplete,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -30,7 +31,8 @@ import {
   Check as CheckIcon,
   AttachMoney as MoneyIcon,
   Inventory as InventoryIcon,
-  Category as CategoryIcon
+  Category as CategoryIcon,
+  Business as BusinessIcon
 } from '@mui/icons-material';
 
 // Memoized ImageItem component
@@ -105,6 +107,7 @@ const AddProductPopup = React.memo(({ isOpen, onClose, onSuccess, editItem }) =>
     code: '',
     name: '',
     category: '',
+    supplier: '', // Thêm trường supplier
     price: 0,
     cost: 0,
     stock: 0,
@@ -118,6 +121,20 @@ const AddProductPopup = React.memo(({ isOpen, onClose, onSuccess, editItem }) =>
   
   const isEditMode = useMemo(() => !!editItem, [editItem]);
 
+  // Danh sách nhà cung cấp mẫu
+  const suppliers = useMemo(() => [
+    'Công ty TNHH ABC',
+    'Công ty CP XYZ', 
+    'Công ty Cổ phần Thực phẩm DEF',
+    'Tập đoàn GHI',
+    'Công ty TNHH MTV JKL',
+    'Nhà phân phối MNO',
+    'Công ty Dược phẩm PQR',
+    'Công ty Mỹ phẩm STU',
+    'Công ty Gia dụng VWX',
+    'Tổng công ty YZ'
+  ], []);
+
   useEffect(() => {
     if (isOpen) {
       fetchImages();
@@ -126,12 +143,26 @@ const AddProductPopup = React.memo(({ isOpen, onClose, onSuccess, editItem }) =>
           code: editItem.code || '',
           name: editItem.name || '',
           category: editItem.category || '',
+          supplier: editItem.supplier || '', // Thêm supplier
           price: editItem.price || 0,
           cost: editItem.cost || 0,
           stock: editItem.stock || 0,
           image: editItem.image || '',
         });
         setSelectedImage(editItem.image || '');
+      } else {
+        // Reset form khi thêm mới
+        setFormData({
+          code: '',
+          name: '',
+          category: '',
+          supplier: '',
+          price: 0,
+          cost: 0,
+          stock: 0,
+          image: '',
+        });
+        setSelectedImage('');
       }
     }
   }, [isOpen, editItem]);
@@ -149,6 +180,10 @@ const AddProductPopup = React.memo(({ isOpen, onClose, onSuccess, editItem }) =>
   const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  }, []);
+
+  const handleSupplierChange = useCallback((event, value) => {
+    setFormData(prev => ({ ...prev, supplier: value || '' }));
   }, []);
 
   const handleImageUpload = useCallback(async (e) => {
@@ -218,6 +253,7 @@ const AddProductPopup = React.memo(({ isOpen, onClose, onSuccess, editItem }) =>
       code: '',
       name: '',
       category: '',
+      supplier: '', // Reset supplier
       price: 0,
       cost: 0,
       stock: 0,
@@ -286,6 +322,7 @@ const AddProductPopup = React.memo(({ isOpen, onClose, onSuccess, editItem }) =>
           </IconButton>
         </DialogTitle>
 
+
         <form onSubmit={handleSubmit}>
           <DialogContent sx={{ pt: 3 }}>
             {/* Thông tin cơ bản */}
@@ -297,6 +334,7 @@ const AddProductPopup = React.memo(({ isOpen, onClose, onSuccess, editItem }) =>
               <Divider sx={{ mb: 2 }} />
               
               <Grid container spacing={2}>
+                {/* Hàng 1: Mã hàng và Tên sản phẩm */}
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
@@ -323,6 +361,8 @@ const AddProductPopup = React.memo(({ isOpen, onClose, onSuccess, editItem }) =>
                     size="small"
                   />
                 </Grid>
+
+                {/* Hàng 2: Danh mục */}
                 <Grid item xs={12}>
                   <TextField
                     fullWidth
@@ -335,6 +375,48 @@ const AddProductPopup = React.memo(({ isOpen, onClose, onSuccess, editItem }) =>
                   />
                 </Grid>
               </Grid>
+            </Box>
+
+            {/* Nhà cung cấp - Box riêng */}
+            <Box mb={3}>
+              <Typography variant="subtitle1" fontWeight={600} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <BusinessIcon color="primary" fontSize="small" />
+                Thông tin nhà cung cấp
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+              
+              <Autocomplete
+                fullWidth
+                options={suppliers}
+                value={formData.supplier}
+                onChange={handleSupplierChange}
+                freeSolo
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Nhà cung cấp"
+                    placeholder="Chọn hoặc nhập nhà cung cấp"
+                    size="small"
+                    InputProps={{
+                      ...params.InputProps,
+                      startAdornment: (
+                        <BusinessIcon sx={{ color: 'action.active', mr: 1, fontSize: 20 }} />
+                      ),
+                    }}
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <Box component="li" {...props}>
+                    <BusinessIcon sx={{ mr: 1, fontSize: 18, color: 'primary.main' }} />
+                    {option}
+                  </Box>
+                )}
+                sx={{
+                  '& .MuiAutocomplete-inputRoot': {
+                    paddingLeft: '8px !important',
+                  }
+                }}
+              />
             </Box>
 
             {/* Giá cả */}
