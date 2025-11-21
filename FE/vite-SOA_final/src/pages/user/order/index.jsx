@@ -92,7 +92,7 @@ function ImportOrder() {
 
   useEffect(() => {
     if (!currentImportOrder.items.length) {
-      navigate('/user/inventory');
+      navigate('/inventory');
     }
   }, [currentImportOrder, navigate]);
 

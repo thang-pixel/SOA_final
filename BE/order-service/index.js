@@ -33,7 +33,7 @@ const importOrderSchema = new mongoose.Schema({
     productCode: { type: String, required: true },
     productName: { type: String, required: true },
     quantity: { type: Number, required: true },
-    actualQuantity: { type: Number, default: null }, // Số lượng thực tế nhận được
+    actualQuantity: { type: Number, default: null },
     unitPrice: { type: Number, required: true },
     discount: { type: Number, default: 0 },
     totalPrice: { type: Number, required: true }
@@ -42,23 +42,29 @@ const importOrderSchema = new mongoose.Schema({
   notes: { type: String },
   createdAt: { type: Date, default: Date.now },
   createdBy: { type: String, required: true },
-  processedAt: { type: Date }, // Thời gian bắt đầu xử lý
-  deliveredAt: { type: Date }, // Thời gian giao hàng
-  completedAt: { type: Date }, // Thời gian hoàn thành nhập kho
-  warehouseReceiptCode: { type: String } // Mã phiếu nhập kho
+  processedAt: { type: Date },
+  deliveredAt: { type: Date },
+  completedAt: { type: Date },
+  warehouseReceiptCode: { type: String }
 });
 
 const ImportOrder = mongoose.model('ImportOrder', importOrderSchema);
+
+// Hàm gửi notification
+async function sendNotification(notificationData) {
+  try {
+    await axios.post('http://localhost:3004/notifications/create', notificationData);
+  } catch (error) {
+    console.error('Error sending notification:', error);
+  }
+}
 
 // API tạo đơn nhập hàng mới
 app.post('/import/create', async (req, res) => {
   try {
     const { items, supplier, createdBy, notes } = req.body;
     
-    // Tạo mã đơn hàng tự động
     const orderCode = `NH${Date.now()}`;
-    
-    // Tính tổng tiền
     const totalAmount = items.reduce((sum, item) => sum + item.totalPrice, 0);
     
     const newOrder = new ImportOrder({
@@ -97,6 +103,16 @@ app.put('/import/submit/:id', async (req, res) => {
     order.processedAt = new Date();
     await order.save();
     
+    // Gửi email đến nhà cung cấp
+    try {
+      await axios.post('http://localhost:3004/send-order-email', {
+        order: order.toObject(),
+        supplier: order.supplier
+      });
+    } catch (emailError) {
+      console.error('Error sending order email:', emailError);
+    }
+    
     // Tự động chuyển sang "delivered" sau 30 giây
     setTimeout(async () => {
       try {
@@ -105,6 +121,20 @@ app.put('/import/submit/:id', async (req, res) => {
           updatedOrder.status = 'delivered';
           updatedOrder.deliveredAt = new Date();
           await updatedOrder.save();
+          
+          // Gửi thông báo yêu cầu tạo phiếu nhập kho
+          await sendNotification({
+            title: 'Đơn hàng đã được giao',
+            message: `Đơn hàng ${updatedOrder.orderCode} đã được giao. Vui lòng tạo phiếu nhập kho.`,
+            type: 'warning',
+            relatedOrderId: updatedOrder.orderCode,
+            metadata: { 
+              orderCode: updatedOrder.orderCode,
+              supplier: updatedOrder.supplier,
+              action: 'create_warehouse_receipt'
+            }
+          });
+          
           console.log(`Order ${order.orderCode} delivered automatically`);
         }
       } catch (error) {
@@ -123,7 +153,7 @@ app.put('/import/submit/:id', async (req, res) => {
 app.put('/import/create-receipt/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { actualQuantities, warehouseStaff } = req.body; // actualQuantities: [{ productId, actualQuantity }]
+    const { actualQuantities, warehouseStaff } = req.body;
     
     const order = await ImportOrder.findById(id);
     if (!order) {
@@ -134,7 +164,6 @@ app.put('/import/create-receipt/:id', async (req, res) => {
       return res.status(400).json({ message: 'Đơn hàng chưa được giao' });
     }
     
-    // Tạo mã phiếu nhập kho
     const warehouseReceiptCode = `PNK${Date.now()}`;
     
     // Cập nhật số lượng thực tế cho từng sản phẩm
@@ -160,6 +189,19 @@ app.put('/import/create-receipt/:id', async (req, res) => {
     order.completedAt = new Date();
     order.warehouseReceiptCode = warehouseReceiptCode;
     await order.save();
+    
+    // Gửi thông báo hoàn thành
+    await sendNotification({
+      title: 'Phiếu nhập kho đã được tạo',
+      message: `Phiếu nhập kho ${warehouseReceiptCode} cho đơn hàng ${order.orderCode} đã được tạo thành công.`,
+      type: 'success',
+      relatedOrderId: order.orderCode,
+      metadata: { 
+        orderCode: order.orderCode,
+        warehouseReceiptCode,
+        warehouseStaff
+      }
+    });
     
     res.json(order);
   } catch (error) {

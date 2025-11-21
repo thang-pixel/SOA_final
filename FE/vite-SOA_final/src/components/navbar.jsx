@@ -9,7 +9,6 @@ import {
   Avatar,
   Menu,
   MenuItem,
-  Badge,
   Box,
   Drawer,
   List,
@@ -32,6 +31,7 @@ import {
 } from '@mui/icons-material';
 import { useDispatch } from 'react-redux';
 import { logOut } from '../redux/action/authAction';
+import NotificationDropdown from './notification'; // Import component mới
 
 // Danh sách menu items cho các service
 const menuItems = [
@@ -238,15 +238,8 @@ function Navbar() {
           
           {/* Phần bên phải: Thông báo và Avatar */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {/* Icon thông báo */}
-            <IconButton 
-              color="inherit" 
-              onClick={() => handleNavigation('/user/notifications')}
-            >
-              <Badge badgeContent={3} color="error">
-                <NotificationsIcon />
-              </Badge>
-            </IconButton>
+            {/* Component thông báo mới */}
+            <NotificationDropdown />
             
             {/* Avatar và menu người dùng */}
             <IconButton

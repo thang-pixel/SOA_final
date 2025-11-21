@@ -90,12 +90,12 @@ const ProfitDisplay = React.memo(({ profit }) => {
 
   return (
     <Grid item xs={12} sm={4}>
-      <Paper sx={{ p: 1.5, bgcolor: 'success.lighter', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Paper sx={{ p: 1.5, bgcolor: 'success.lighter', height: '30%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Box textAlign="center">
           <Typography variant="caption" color="text.secondary" display="block">
-            Lợi nhuận dự kiến
+            Lợi nhuận dự kiến   <Chip {...chipProps} sx={{ mt: 0.5, fontWeight: 600 }} />
           </Typography>
-          <Chip {...chipProps} sx={{ mt: 0.5, fontWeight: 600 }} />
+          
         </Box>
       </Paper>
     </Grid>
