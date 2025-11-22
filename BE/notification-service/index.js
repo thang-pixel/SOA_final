@@ -59,6 +59,11 @@ const imapConfig = {
 let rabbitConnection;
 let rabbitChannel;
 
+
+
+
+
+
 // Kết nối RabbitMQ
 async function connectRabbitMQ() {
   try {
@@ -243,7 +248,7 @@ function startEmailMonitoring() {
             msg.on('body', function(stream, info) {
               simpleParser(stream, async (err, parsed) => {
                 if (err) return;
-                
+
                 // Kiểm tra nếu email từ supplier
                 if (parsed.from.text.includes('lehang.com86@gmail.com')) {
                   await createNotification({
@@ -255,6 +260,11 @@ function startEmailMonitoring() {
                       from: parsed.from.text,
                       snippet: parsed.text ? parsed.text.substring(0, 100) + '...' : ''
                     }
+                  });
+
+                  // Đánh dấu email đã đọc để không bị lặp lại lần sau
+                  imap.addFlags(seqno, '\\Seen', (err) => {
+                    if (err) console.error('Error marking email as seen:', err);
                   });
                 }
               });

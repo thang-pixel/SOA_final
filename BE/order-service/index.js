@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const axios = require('axios');
+const amqp = require('amqplib'); // Thêm RabbitMQ
 const app = express();
 
 app.use(express.json());
@@ -50,12 +51,77 @@ const importOrderSchema = new mongoose.Schema({
 
 const ImportOrder = mongoose.model('ImportOrder', importOrderSchema);
 
-// Hàm gửi notification
-async function sendNotification(notificationData) {
+// RabbitMQ connection
+let rabbitConnection;
+let rabbitChannel;
+
+// Kết nối RabbitMQ
+async function connectRabbitMQ() {
   try {
-    await axios.post('http://localhost:3004/notifications/create', notificationData);
+    rabbitConnection = await amqp.connect(process.env.RABBITMQ_URL || 'amqp://localhost');
+    rabbitChannel = await rabbitConnection.createChannel();
+    
+    // Tạo queue cho email và notification
+    await rabbitChannel.assertQueue('email_queue', { durable: true });
+    await rabbitChannel.assertQueue('notification_queue', { durable: true });
+    
+    console.log('Order Service connected to RabbitMQ');
   } catch (error) {
-    console.error('Error sending notification:', error);
+    console.error('Failed to connect to RabbitMQ:', error);
+    // Retry connection sau 5 giây
+    setTimeout(connectRabbitMQ, 5000);
+  }
+}
+
+// Hàm gửi message vào notification queue
+async function sendNotificationMessage(notificationData) {
+  try {
+    if (rabbitChannel) {
+      rabbitChannel.sendToQueue(
+        'notification_queue', 
+        Buffer.from(JSON.stringify(notificationData)),
+        { persistent: true }
+      );
+      console.log('Notification message sent to queue:', notificationData.title);
+    } else {
+      console.error('RabbitMQ channel not available, falling back to direct API call');
+      // Fallback: gọi trực tiếp API nếu RabbitMQ không khả dụng
+      await axios.post('http://localhost:3004/notifications/create', notificationData);
+    }
+  } catch (error) {
+    console.error('Error sending notification message:', error);
+    // Fallback: gọi trực tiếp API nếu có lỗi
+    try {
+      await axios.post('http://localhost:3004/notifications/create', notificationData);
+    } catch (apiError) {
+      console.error('Error with fallback API call:', apiError);
+    }
+  }
+}
+
+// Hàm gửi email message vào email queue
+async function sendEmailMessage(emailData) {
+  try {
+    if (rabbitChannel) {
+      rabbitChannel.sendToQueue(
+        'email_queue', 
+        Buffer.from(JSON.stringify(emailData)),
+        { persistent: true }
+      );
+      console.log('Email message sent to queue for order:', emailData.order.orderCode);
+    } else {
+      console.error('RabbitMQ channel not available, falling back to direct API call');
+      // Fallback: gọi trực tiếp API nếu RabbitMQ không khả dụng
+      await axios.post('http://localhost:3004/send-order-email', emailData);
+    }
+  } catch (error) {
+    console.error('Error sending email message:', error);
+    // Fallback: gọi trực tiếp API nếu có lỗi
+    try {
+      await axios.post('http://localhost:3004/send-order-email', emailData);
+    } catch (apiError) {
+      console.error('Error with fallback API call:', apiError);
+    }
   }
 }
 
@@ -103,15 +169,11 @@ app.put('/import/submit/:id', async (req, res) => {
     order.processedAt = new Date();
     await order.save();
     
-    // Gửi email đến nhà cung cấp
-    try {
-      await axios.post('http://localhost:3004/send-order-email', {
-        order: order.toObject(),
-        supplier: order.supplier
-      });
-    } catch (emailError) {
-      console.error('Error sending order email:', emailError);
-    }
+    // Gửi email đến nhà cung cấp qua RabbitMQ
+    await sendEmailMessage({
+      order: order.toObject(),
+      supplier: order.supplier
+    });
     
     // Tự động chuyển sang "delivered" sau 30 giây
     setTimeout(async () => {
@@ -122,8 +184,8 @@ app.put('/import/submit/:id', async (req, res) => {
           updatedOrder.deliveredAt = new Date();
           await updatedOrder.save();
           
-          // Gửi thông báo yêu cầu tạo phiếu nhập kho
-          await sendNotification({
+          // Gửi thông báo yêu cầu tạo phiếu nhập kho qua RabbitMQ
+          await sendNotificationMessage({
             title: 'Đơn hàng đã được giao',
             message: `Đơn hàng ${updatedOrder.orderCode} đã được giao. Vui lòng tạo phiếu nhập kho.`,
             type: 'warning',
@@ -190,8 +252,8 @@ app.put('/import/create-receipt/:id', async (req, res) => {
     order.warehouseReceiptCode = warehouseReceiptCode;
     await order.save();
     
-    // Gửi thông báo hoàn thành
-    await sendNotification({
+    // Gửi thông báo hoàn thành qua RabbitMQ
+    await sendNotificationMessage({
       title: 'Phiếu nhập kho đã được tạo',
       message: `Phiếu nhập kho ${warehouseReceiptCode} cho đơn hàng ${order.orderCode} đã được tạo thành công.`,
       type: 'success',
@@ -232,6 +294,22 @@ app.get('/import/:id', async (req, res) => {
   } catch (error) {
     console.error('Error fetching import order:', error);
     res.status(500).json({ message: 'Lỗi lấy chi tiết đơn nhập hàng' });
+  }
+});
+
+// Khởi tạo RabbitMQ connection khi server start
+connectRabbitMQ();
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  try {
+    if (rabbitChannel) await rabbitChannel.close();
+    if (rabbitConnection) await rabbitConnection.close();
+    console.log('RabbitMQ connection closed');
+    process.exit(0);
+  } catch (error) {
+    console.error('Error during shutdown:', error);
+    process.exit(1);
   }
 });
 
