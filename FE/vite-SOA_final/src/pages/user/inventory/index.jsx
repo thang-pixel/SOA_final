@@ -2,9 +2,9 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchInventoryItems } from '../../../redux/action/inventory';
 import { setSearchFilter, setStockFilter } from '../../../redux/reducers/inventorySlice';
+import { createImportOrder, createExportOrder } from '../../../redux/action/orderAction';
 import AddProductPopup from '../../../components/AddProductPopup';
 import { useNavigate } from 'react-router-dom';
-import { createImportOrder } from '../../../redux/action/orderAction'; 
 import {
   Box,
   Paper,
@@ -25,6 +25,9 @@ import {
   Stack,
   Fade
 } from '@mui/material';
+
+import { useNotification } from '../../../hooks/useNotification';
+import NotificationSnackbar from '../../../components/NotificationSnackbar';
 import { DataGrid } from '@mui/x-data-grid';
 import {
   Add as AddIcon,
@@ -37,7 +40,8 @@ import {
   Warning as WarningIcon,
   Print as PrintIcon,
   Download as DownloadIcon,
-  Business as BusinessIcon
+  Business as BusinessIcon,
+  ShoppingCart as ShoppingCartIcon
 } from '@mui/icons-material';
 
 // Memoized components for statistics cards
@@ -60,8 +64,6 @@ const StatCard = React.memo(({ title, value, icon, color = "primary" }) => (
     </CardContent>
   </Card>
 ));
-
-
 
 // Memoized cell renderers
 const ImageCell = React.memo(({ src, alt }) => (
@@ -169,10 +171,11 @@ const SelectionActions = React.memo(({ selectedCount, onExport, onPrintLabels, o
         Đã chọn: <strong>{selectedCount}</strong> sản phẩm
       </Typography>
       <Button
-        variant="outlined"
-        startIcon={<DownloadIcon />}
+        variant="contained"
+        startIcon={<ShoppingCartIcon />}
         onClick={onExport}
         sx={{ textTransform: 'none' }}
+        color="success"
       >
         Xuất hàng
       </Button>
@@ -233,11 +236,20 @@ function Inventory() {
   const [editingItem, setEditingItem] = useState(null);
   const [selectionModel, setSelectionModel] = useState([]);
   const navigate = useNavigate();
+  
+  // Sử dụng notification hook
+  const {
+    notification,
+    hideNotification,
+    showSuccess,
+    showError,
+    showWarning,
+    showInfo
+  } = useNotification();
+
   useEffect(() => {
     dispatch(fetchInventoryItems());
   }, [dispatch]);
-
-  
 
   // Memoized filtered items
   const filteredItems = useMemo(() => {
@@ -294,40 +306,64 @@ function Inventory() {
     setSelectionModel(newSelection);
   }, []);
 
-  // Action handlers cho selection
+  // Action handlers cho selection - XUẤT HÀNG
   const handleExportSelected = useCallback(() => {
     const selectedItems = filteredItems.filter(item => selectionModel.includes(item._id));
-    console.log('Xuất file cho các sản phẩm:', selectedItems);
-    // TODO: Implement export functionality
-  }, [selectionModel, filteredItems]);
+    
+    if (selectedItems.length === 0) {
+      showWarning('Vui lòng chọn ít nhất một sản phẩm để xuất hàng');
+      return;
+    }
+    
+    // Kiểm tra tồn kho
+    const outOfStockItems = selectedItems.filter(item => item.stock === 0);
+    if (outOfStockItems.length > 0) {
+      showError(
+        `Không thể xuất hàng! Các sản phẩm sau đã hết hàng: ${outOfStockItems.map(item => item.name).join(', ')}`,
+        10000
+      );
+      return;
+    }
+    
+    dispatch(createExportOrder(selectedItems));
+    
+    navigate('/user/order-export');
+  }, [selectionModel, filteredItems, dispatch, navigate, showWarning, showError, showInfo]);
 
   const handlePrintLabels = useCallback(() => {
     const selectedItems = filteredItems.filter(item => selectionModel.includes(item._id));
-    console.log('In tem mã cho các sản phẩm:', selectedItems);
+    if (selectedItems.length === 0) {
+      showWarning('Vui lòng chọn sản phẩm để in tem mã');
+      return;
+    }
+    
+    showInfo(`Đang chuẩn bị in tem mã cho ${selectedItems.length} sản phẩm...`);
     // TODO: Implement print labels functionality
-  }, [selectionModel, filteredItems]);
+  }, [selectionModel, filteredItems, showWarning, showInfo]);
 
+  // Action handlers cho selection - NHẬP HÀNG
   const handleImportSelected = useCallback(() => {
-  const selectedItems = filteredItems.filter(item => selectionModel.includes(item._id));
-  
-  if (selectedItems.length === 0) {
-    alert('Vui lòng chọn ít nhất một sản phẩm');
-    return;
-  }
-  
-  dispatch(createImportOrder(selectedItems));
-  navigate('/user/order');
-}, [selectionModel, filteredItems, dispatch, navigate]);
+    const selectedItems = filteredItems.filter(item => selectionModel.includes(item._id));
+    
+    if (selectedItems.length === 0) {
+      showWarning('Vui lòng chọn ít nhất một sản phẩm để nhập hàng');
+      return;
+    }
+    
+    dispatch(createImportOrder(selectedItems));
+    showInfo(`Đã chọn ${selectedItems.length} sản phẩm để nhập hàng. Chuyển đến trang tạo đơn...`);
+    setTimeout(() => navigate('/user/order'), 1000);
+  }, [selectionModel, filteredItems, dispatch, navigate, showWarning, showInfo]);
 
   const handleImport = useCallback(() => {
-    console.log('Import file');
+    showInfo('Tính năng import file đang được phát triển');
     // TODO: Implement import functionality
-  }, []);
+  }, [showInfo]);
 
   const handleExport = useCallback(() => {
-    console.log('Export file');
+    showInfo('Tính năng xuất file đang được phát triển');
     // TODO: Implement export functionality
-  }, []);
+  }, [showInfo]);
 
   // Memoized statistics
   const statistics = useMemo(() => {
@@ -585,6 +621,15 @@ function Inventory() {
         onClose={handleClosePopup}
         onSuccess={handleAddSuccess}
         editItem={editingItem}
+      />
+
+      {/* Notification Snackbar */}
+      <NotificationSnackbar
+        open={notification.open}
+        message={notification.message}
+        severity={notification.severity}
+        autoHideDuration={notification.autoHideDuration}
+        onClose={hideNotification}
       />
     </Box>
   );

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -43,10 +44,15 @@ import {
   FilterList as FilterIcon,
   ViewModule as ViewModuleIcon,
   TableRows as TableRowsIcon,
-  Visibility as VisibilityIcon
+  Visibility as VisibilityIcon,
+  Receipt as ReceiptIcon,
+  Person as PersonIcon,
+  Search as SearchIcon,
+  Clear as ClearIcon
 } from '@mui/icons-material';
 import {
   fetchImportOrders,
+  fetchExportOrders,
   createWarehouseReceipt,
   completeWarehouseReceipt
 } from '../../../redux/action/orderAction';
@@ -55,6 +61,10 @@ import {
   setWarehouseStaff,
   clearWarehouseReceipt
 } from '../../../redux/reducers/orderSlice';
+import { useNotification } from '../../../hooks/useNotification';
+import NotificationSnackbar from '../../../components/NotificationSnackbar';
+import ConfirmDialog from '../../../components/ConfirmDialog';
+import { useConfirm } from '../../../hooks/useConfirm';
 
 // Component hiển thị trạng thái đơn hàng
 const OrderStatusChip = React.memo(({ status }) => {
@@ -74,6 +84,19 @@ const OrderStatusChip = React.memo(({ status }) => {
       color={config.color}
       size="small"
       variant="outlined"
+    />
+  );
+});
+
+// Component hiển thị loại đơn hàng
+const OrderTypeChip = React.memo(({ type }) => {
+  return (
+    <Chip
+      label={type === 'import' ? 'Nhập hàng' : 'Xuất hàng'}
+      color={type === 'import' ? 'primary' : 'success'}
+      size="small"
+      variant="filled"
+      icon={type === 'import' ? <WarehouseIcon /> : <ReceiptIcon />}
     />
   );
 });
@@ -123,16 +146,21 @@ const OrderDetailDialog = React.memo(({ open, onClose, order }) => {
         <Box display="flex" alignItems="center" gap={1}>
           <VisibilityIcon color="primary" />
           <Typography variant="h6">
-            Chi tiết đơn hàng - {order.orderCode}
+            Chi tiết đơn hàng - {order.orderCode || order.receiptCode}
           </Typography>
+          <OrderTypeChip type={order.type} />
         </Box>
       </DialogTitle>
       
       <DialogContent sx={{ pt: 2 }}>
         <Grid container spacing={2} mb={3}>
           <Grid item xs={6}>
-            <Typography variant="subtitle2" color="text.secondary">Nhà cung cấp:</Typography>
-            <Typography variant="body1">{order.supplier}</Typography>
+            <Typography variant="subtitle2" color="text.secondary">
+              {order.type === 'import' ? 'Nhà cung cấp:' : 'Khách hàng:'}
+            </Typography>
+            <Typography variant="body1">
+              {order.supplier || order.customerName || 'Khách lẻ'}
+            </Typography>
           </Grid>
           <Grid item xs={6}>
             <Typography variant="subtitle2" color="text.secondary">Trạng thái:</Typography>
@@ -148,6 +176,21 @@ const OrderDetailDialog = React.memo(({ open, onClose, order }) => {
             <Typography variant="subtitle2" color="text.secondary">Tạo bởi:</Typography>
             <Typography variant="body1">{order.createdBy}</Typography>
           </Grid>
+          {order.type === 'export' && order.paymentMethod && (
+            <>
+              <Grid item xs={6}>
+                <Typography variant="subtitle2" color="text.secondary">Phương thức thanh toán:</Typography>
+                <Typography variant="body1">
+                  {order.paymentMethod === 'cash' ? 'Tiền mặt' : 
+                   order.paymentMethod === 'card' ? 'Thẻ' : 'Chuyển khoản'}
+                </Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="subtitle2" color="text.secondary">SĐT khách hàng:</Typography>
+                <Typography variant="body1">{order.customerPhone || 'Không có'}</Typography>
+              </Grid>
+            </>
+          )}
         </Grid>
 
         <Typography variant="h6" gutterBottom>Danh sách sản phẩm</Typography>
@@ -203,6 +246,15 @@ const WarehouseReceiptDialog = React.memo(({ open, onClose, order }) => {
   const dispatch = useDispatch();
   const { warehouseReceipt } = useSelector(state => state.order);
   const { user } = useSelector(state => state.auth);
+  
+  // Notification hooks
+  const {
+    notification,
+    hideNotification,
+    showSuccess,
+    showError,
+    showWarning
+  } = useNotification();
 
   useEffect(() => {
     if (open && order) {
@@ -225,7 +277,7 @@ const WarehouseReceiptDialog = React.memo(({ open, onClose, order }) => {
   const handleSubmit = useCallback(async () => {
     try {
       if (!warehouseReceipt.warehouseStaff.trim()) {
-        alert('Vui lòng nhập tên nhân viên kho');
+        showWarning('Vui lòng nhập tên nhân viên kho trước khi tạo phiếu');
         return;
       }
 
@@ -234,18 +286,26 @@ const WarehouseReceiptDialog = React.memo(({ open, onClose, order }) => {
         actualQuantity: item.actualQuantity
       }));
 
-      await dispatch(completeWarehouseReceipt(
+      const result = await dispatch(completeWarehouseReceipt(
         warehouseReceipt.orderId,
         actualQuantities,
         warehouseReceipt.warehouseStaff
       ));
 
-      alert('Tạo phiếu nhập kho thành công! Tồn kho đã được cập nhật.');
+      showSuccess(
+        `Phiếu nhập kho ${result.warehouseReceiptCode} đã được tạo thành công! Tồn kho đã được cập nhật.`,
+        'Tạo phiếu thành công',
+        6000
+      );
       onClose();
     } catch (error) {
-      alert('Lỗi khi tạo phiếu nhập kho: ' + error.message);
+      showError(
+        `Lỗi khi tạo phiếu nhập kho: ${error.message}`,
+        'Tạo phiếu thất bại',
+        8000
+      );
     }
-  }, [warehouseReceipt, dispatch, onClose]);
+  }, [warehouseReceipt, dispatch, onClose, showWarning, showSuccess, showError]);
 
   const handleClose = useCallback(() => {
     dispatch(clearWarehouseReceipt());
@@ -257,138 +317,226 @@ const WarehouseReceiptDialog = React.memo(({ open, onClose, order }) => {
   }, [warehouseReceipt.items]);
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        <Box display="flex" alignItems="center" gap={1}>
-          <WarehouseIcon color="primary" />
-          <Typography variant="h6">
-            Tạo phiếu nhập kho - {order?.orderCode}
-          </Typography>
-        </Box>
-      </DialogTitle>
-      
-      <DialogContent sx={{ pt: 2 }}>
-        <Box mb={3}>
-          <TextField
-            fullWidth
-            label="Nhân viên kho"
-            value={warehouseReceipt.warehouseStaff}
-            onChange={handleStaffChange}
-            size="small"
-            required
-            placeholder="Nhập tên nhân viên thực hiện kiểm tra"
-          />
-        </Box>
-
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Mã hàng</TableCell>
-                <TableCell>Tên sản phẩm</TableCell>
-                <TableCell align="center">SL đặt hàng</TableCell>
-                <TableCell align="center">SL thực nhận</TableCell>
-                <TableCell align="center">Chênh lệch</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {warehouseReceipt.items.map((item, index) => (
-                <TableRow key={item.productId}>
-                  <TableCell>
-                    <Typography color="primary" fontWeight={500}>
-                      {item.productCode}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{item.productName}</TableCell>
-                  <TableCell align="center">
-                    <Chip label={item.quantity} size="small" variant="outlined" />
-                  </TableCell>
-                  <TableCell align="center">
-                    <TextField
-                      type="number"
-                      value={item.actualQuantity || 0}
-                      onChange={(e) => handleActualQuantityChange(index, e.target.value)}
-                      inputProps={{ min: 0, style: { textAlign: 'center' } }}
-                      size="small"
-                      sx={{ width: 80 }}
-                    />
-                  </TableCell>
-                  <TableCell align="center">
-                    {(() => {
-                      const diff = (item.actualQuantity || 0) - item.quantity;
-                      return (
-                        <Typography 
-                          color={diff === 0 ? 'text.secondary' : diff > 0 ? 'success.main' : 'error.main'}
-                          fontWeight={diff !== 0 ? 600 : 400}
-                        >
-                          {diff > 0 ? '+' : ''}{diff}
-                        </Typography>
-                      );
-                    })()}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <Divider sx={{ my: 2 }} />
+    <>
+      <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Box display="flex" alignItems="center" gap={1}>
+            <WarehouseIcon color="primary" />
+            <Typography variant="h6">
+              Tạo phiếu nhập kho - {order?.orderCode}
+            </Typography>
+          </Box>
+        </DialogTitle>
         
-        <Box display="flex" justifyContent="space-between">
-          <Typography variant="body2" color="text.secondary">
-            Tổng số lượng thực nhận:
-          </Typography>
-          <Chip label={totalActual} color="primary" />
-        </Box>
-      </DialogContent>
-      
-      <DialogActions>
-        <Button onClick={handleClose}>Hủy</Button>
-        <Button 
-          variant="contained" 
-          onClick={handleSubmit}
-          disabled={warehouseReceipt.isCreating}
-        >
-          Tạo phiếu nhập kho
-        </Button>
-      </DialogActions>
-    </Dialog>
+        <DialogContent sx={{ pt: 2 }}>
+          <Box mb={3}>
+            <TextField
+              fullWidth
+              label="Nhân viên kho"
+              value={warehouseReceipt.warehouseStaff}
+              onChange={handleStaffChange}
+              size="small"
+              required
+              placeholder="Nhập tên nhân viên thực hiện kiểm tra"
+            />
+          </Box>
+
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Mã hàng</TableCell>
+                  <TableCell>Tên sản phẩm</TableCell>
+                  <TableCell align="center">SL đặt hàng</TableCell>
+                  <TableCell align="center">SL thực nhận</TableCell>
+                  <TableCell align="center">Chênh lệch</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {warehouseReceipt.items.map((item, index) => (
+                  <TableRow key={item.productId}>
+                    <TableCell>
+                      <Typography color="primary" fontWeight={500}>
+                        {item.productCode}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{item.productName}</TableCell>
+                    <TableCell align="center">
+                      <Chip label={item.quantity} size="small" variant="outlined" />
+                    </TableCell>
+                    <TableCell align="center">
+                      <TextField
+                        type="number"
+                        value={item.actualQuantity || 0}
+                        onChange={(e) => handleActualQuantityChange(index, e.target.value)}
+                        inputProps={{ min: 0, style: { textAlign: 'center' } }}
+                        size="small"
+                        sx={{ width: 80 }}
+                      />
+                    </TableCell>
+                    <TableCell align="center">
+                      {(() => {
+                        const diff = (item.actualQuantity || 0) - item.quantity;
+                        return (
+                          <Typography 
+                            color={diff === 0 ? 'text.secondary' : diff > 0 ? 'success.main' : 'error.main'}
+                            fontWeight={diff !== 0 ? 600 : 400}
+                          >
+                            {diff > 0 ? '+' : ''}{diff}
+                          </Typography>
+                        );
+                      })()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          <Divider sx={{ my: 2 }} />
+          
+          <Box display="flex" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">
+              Tổng số lượng thực nhận:
+            </Typography>
+            <Chip label={totalActual} color="primary" />
+          </Box>
+        </DialogContent>
+        
+        <DialogActions>
+          <Button onClick={handleClose}>Hủy</Button>
+          <Button 
+            variant="contained" 
+            onClick={handleSubmit}
+            disabled={warehouseReceipt.isCreating}
+          >
+            Tạo phiếu nhập kho
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Notification Snackbar */}
+      <NotificationSnackbar
+        open={notification.open}
+        message={notification.message}
+        severity={notification.severity}
+        autoHideDuration={notification.autoHideDuration}
+        onClose={hideNotification}
+        title={notification.title}
+      />
+    </>
   );
 });
 
 function OrderManager() {
   const dispatch = useDispatch();
-  const { importOrders, loading, error } = useSelector(state => state.order);
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { importOrders, exportOrders, loading, error } = useSelector(state => state.order);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showWarehouseDialog, setShowWarehouseDialog] = useState(false);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   
-  // State cho filters
+  // State cho filters - bao gồm cả order code search
+  const [orderType, setOrderType] = useState('all'); // 'all', 'import', 'export'
   const [statusFilter, setStatusFilter] = useState('all');
   const [supplierFilter, setSupplierFilter] = useState('');
+  const [orderCodeSearch, setOrderCodeSearch] = useState(''); // NEW: Tìm kiếm theo mã đơn hàng
   
   // State cho view mode
   const [viewMode, setViewMode] = useState('cards'); // 'cards' hoặc 'table'
 
+  // Notification hooks
+  const {
+    notification,
+    hideNotification,
+    showSuccess,
+    showError,
+    showInfo
+  } = useNotification();
+
+  // Effect để xử lý URL parameters từ notifications
+  useEffect(() => {
+    const filterParam = searchParams.get('filter');
+    const searchParam = searchParams.get('search');
+
+    if (filterParam) {
+      if (filterParam === 'import') {
+        setOrderType('import');
+      } else if (filterParam === 'export') {
+        setOrderType('export');
+      }
+    }
+
+    if (searchParam) {
+      setOrderCodeSearch(searchParam);
+      showInfo(`Đang tìm kiếm đơn hàng: ${searchParam}`, '', 3000);
+    }
+
+    // Clear URL parameters sau khi đã áp dụng
+    if (filterParam || searchParam) {
+      // Tạo URL mới không có parameters
+      const newUrl = location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [searchParams, location.pathname, showInfo]);
+
   useEffect(() => {
     dispatch(fetchImportOrders());
+    dispatch(fetchExportOrders());
   }, [dispatch]);
 
-  // Lọc đơn hàng theo trạng thái và nhà cung cấp
+  // Kết hợp và lọc orders
+  const allOrders = useMemo(() => {
+    let combined = [];
+    
+    // Thêm import orders
+    if (orderType === 'all' || orderType === 'import') {
+      const importOrdersWithType = importOrders.map(order => ({
+        ...order,
+        type: 'import'
+      }));
+      combined = [...combined, ...importOrdersWithType];
+    }
+    
+    // Thêm export orders
+    if (orderType === 'all' || orderType === 'export') {
+      const exportOrdersWithType = exportOrders.map(order => ({
+        ...order,
+        type: 'export',
+        orderCode: order.receiptCode,
+        supplier: order.customerName || 'Khách lẻ',
+        status: 'completed'
+      }));
+      combined = [...combined, ...exportOrdersWithType];
+    }
+    
+    // Sắp xếp theo thời gian tạo
+    return combined.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [importOrders, exportOrders, orderType]);
+
+  // Lọc theo filters bao gồm cả order code search
   const filteredOrders = useMemo(() => {
-    return importOrders.filter(order => {
+    return allOrders.filter(order => {
       const matchStatus = statusFilter === 'all' || order.status === statusFilter;
       const matchSupplier = !supplierFilter || 
-        order.supplier.toLowerCase().includes(supplierFilter.toLowerCase());
+        (order.supplier && order.supplier.toLowerCase().includes(supplierFilter.toLowerCase()));
       
-      return matchStatus && matchSupplier;
+      // NEW: Lọc theo mã đơn hàng
+      const orderCode = order.orderCode || order.receiptCode || '';
+      const matchOrderCode = !orderCodeSearch || 
+        orderCode.toLowerCase().includes(orderCodeSearch.toLowerCase());
+      
+      return matchStatus && matchSupplier && matchOrderCode;
     });
-  }, [importOrders, statusFilter, supplierFilter]);
+  }, [allOrders, statusFilter, supplierFilter, orderCodeSearch]);
 
   // Thống kê theo trạng thái
   const statusStats = useMemo(() => {
     const stats = {
-      all: importOrders.length,
+      all: allOrders.length,
+      import: importOrders.length,
+      export: exportOrders.length,
       draft: 0,
       processing: 0,
       delivered: 0,
@@ -396,22 +544,28 @@ function OrderManager() {
       cancelled: 0
     };
 
-    importOrders.forEach(order => {
+    allOrders.forEach(order => {
       stats[order.status] = (stats[order.status] || 0) + 1;
     });
 
     return stats;
-  }, [importOrders]);
+  }, [allOrders, importOrders, exportOrders]);
 
   // Lấy danh sách nhà cung cấp unique
   const suppliers = useMemo(() => {
-    const uniqueSuppliers = [...new Set(importOrders.map(order => order.supplier))];
+    const uniqueSuppliers = [...new Set(
+      allOrders
+        .map(order => order.supplier)
+        .filter(supplier => supplier)
+    )];
     return uniqueSuppliers.sort();
-  }, [importOrders]);
+  }, [allOrders]);
 
   const handleRefresh = useCallback(() => {
     dispatch(fetchImportOrders());
-  }, [dispatch]);
+    dispatch(fetchExportOrders());
+    showInfo('Đã làm mới danh sách đơn hàng', '', 2000);
+  }, [dispatch, showInfo]);
 
   const handleCreateWarehouseReceipt = useCallback((order) => {
     setSelectedOrder(order);
@@ -434,6 +588,10 @@ function OrderManager() {
     setSelectedOrder(null);
   }, []);
 
+  const handleOrderTypeChange = useCallback((event) => {
+    setOrderType(event.target.value);
+  }, []);
+
   const handleStatusFilterChange = useCallback((event) => {
     setStatusFilter(event.target.value);
   }, []);
@@ -441,6 +599,17 @@ function OrderManager() {
   const handleSupplierFilterChange = useCallback((event) => {
     setSupplierFilter(event.target.value);
   }, []);
+
+  // NEW: Handler cho search order code
+  const handleOrderCodeSearchChange = useCallback((event) => {
+    setOrderCodeSearch(event.target.value);
+  }, []);
+
+  // NEW: Clear order code search
+  const handleClearOrderCodeSearch = useCallback(() => {
+    setOrderCodeSearch('');
+    showInfo('Đã xóa bộ lọc mã đơn hàng', '', 2000);
+  }, [showInfo]);
 
   const handleViewModeChange = useCallback((event, newViewMode) => {
     if (newViewMode !== null) {
@@ -453,15 +622,25 @@ function OrderManager() {
     return new Date(dateString).toLocaleString('vi-VN');
   }, []);
 
-  // Render DataGrid view
+  // Clear all filters
+  const handleClearAllFilters = useCallback(() => {
+    setOrderType('all');
+    setStatusFilter('all');
+    setSupplierFilter('');
+    setOrderCodeSearch('');
+    showInfo('Đã xóa tất cả bộ lọc', '', 2000);
+  }, [showInfo]);
+
+  // Render Table view
   const renderTableView = useCallback(() => (
     <Paper sx={{ mb: 3 }}>
       <TableContainer>
         <Table>
           <TableHead>
             <TableRow>
+              <TableCell>Loại</TableCell>
               <TableCell>Mã đơn hàng</TableCell>
-              <TableCell>Nhà cung cấp</TableCell>
+              <TableCell>Khách hàng/NCC</TableCell>
               <TableCell align="center">Trạng thái</TableCell>
               <TableCell align="right">Tổng tiền</TableCell>
               <TableCell align="center">Số SP</TableCell>
@@ -472,15 +651,32 @@ function OrderManager() {
           </TableHead>
           <TableBody>
             {filteredOrders.map((order) => (
-              <TableRow key={order._id} hover>
+              <TableRow 
+                key={`${order.type}-${order._id}`} 
+                hover
+                sx={{
+                  backgroundColor: orderCodeSearch && 
+                    (order.orderCode || order.receiptCode || '').toLowerCase().includes(orderCodeSearch.toLowerCase())
+                    ? 'action.selected' : 'transparent'
+                }}
+              >
                 <TableCell>
-                  <Typography variant="body2" fontWeight={600} color="primary">
-                    {order.orderCode}
+                  <OrderTypeChip type={order.type} />
+                </TableCell>
+                <TableCell>
+                  <Typography 
+                    variant="body2" 
+                    fontWeight={600} 
+                    color={orderCodeSearch && 
+                      (order.orderCode || order.receiptCode || '').toLowerCase().includes(orderCodeSearch.toLowerCase())
+                      ? 'primary.main' : 'primary.main'}
+                  >
+                    {order.orderCode || order.receiptCode}
                   </Typography>
                 </TableCell>
                 <TableCell>
                   <Box display="flex" alignItems="center" gap={1}>
-                    <BusinessIcon fontSize="small" color="action" />
+                    {order.type === 'import' ? <BusinessIcon fontSize="small" color="action" /> : <PersonIcon fontSize="small" color="action" />}
                     <Typography variant="body2">
                       {order.supplier}
                     </Typography>
@@ -515,11 +711,16 @@ function OrderManager() {
                         <Typography variant="caption">Có thể nhập kho</Typography>
                       </Alert>
                     )}
-                    {order.status === 'completed' && (
+                    {order.status === 'completed' && order.type === 'import' && (
                       <Alert severity="success" sx={{ py: 0, px: 1 }}>
                         <Typography variant="caption">
                           {order.warehouseReceiptCode}
                         </Typography>
+                      </Alert>
+                    )}
+                    {order.type === 'export' && (
+                      <Alert severity="success" sx={{ py: 0, px: 1 }}>
+                        <Typography variant="caption">Đã xuất hàng</Typography>
                       </Alert>
                     )}
                   </Box>
@@ -534,7 +735,7 @@ function OrderManager() {
                         <VisibilityIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                    {order.status === 'delivered' && (
+                    {order.status === 'delivered' && order.type === 'import' && (
                       <Tooltip title="Tạo phiếu nhập kho">
                         <IconButton
                           size="small"
@@ -553,24 +754,42 @@ function OrderManager() {
         </Table>
       </TableContainer>
     </Paper>
-  ), [filteredOrders, formatDate, handleRefresh, handleViewDetail, handleCreateWarehouseReceipt]);
+  ), [filteredOrders, orderCodeSearch, formatDate, handleRefresh, handleViewDetail, handleCreateWarehouseReceipt]);
 
   // Render Cards view
   const renderCardsView = useCallback(() => (
     <Grid container spacing={3}>
       {filteredOrders.map((order) => (
-        <Grid item xs={12} md={6} lg={4} key={order._id}>
-          <Card>
+        <Grid item xs={12} md={6} lg={4} key={`${order.type}-${order._id}`}>
+          <Card
+            sx={{
+              border: orderCodeSearch && 
+                (order.orderCode || order.receiptCode || '').toLowerCase().includes(orderCodeSearch.toLowerCase())
+                ? '2px solid' : '1px solid',
+              borderColor: orderCodeSearch && 
+                (order.orderCode || order.receiptCode || '').toLowerCase().includes(orderCodeSearch.toLowerCase())
+                ? 'primary.main' : 'divider'
+            }}
+          >
             <CardContent>
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                <Typography variant="h6" fontWeight={600}>
-                  {order.orderCode}
+                <Typography 
+                  variant="h6" 
+                  fontWeight={600}
+                  color={orderCodeSearch && 
+                    (order.orderCode || order.receiptCode || '').toLowerCase().includes(orderCodeSearch.toLowerCase())
+                    ? 'primary.main' : 'text.primary'}
+                >
+                  {order.orderCode || order.receiptCode}
                 </Typography>
-                <OrderStatusChip status={order.status} />
+                <Box display="flex" gap={1}>
+                  <OrderTypeChip type={order.type} />
+                  <OrderStatusChip status={order.status} />
+                </Box>
               </Box>
               
               <Box display="flex" alignItems="center" gap={1} mb={1}>
-                <BusinessIcon fontSize="small" color="action" />
+                {order.type === 'import' ? <BusinessIcon fontSize="small" color="action" /> : <PersonIcon fontSize="small" color="action" />}
                 <Typography variant="body2" color="text.secondary">
                   {order.supplier}
                 </Typography>
@@ -595,15 +814,21 @@ function OrderManager() {
                 />
               )}
 
-              {order.status === 'delivered' && (
+              {order.status === 'delivered' && order.type === 'import' && (
                 <Alert severity="info" sx={{ mb: 2 }}>
                   Hàng đã được giao. Có thể tạo phiếu nhập kho.
                 </Alert>
               )}
 
-              {order.status === 'completed' && (
+              {order.status === 'completed' && order.type === 'import' && (
                 <Alert severity="success" sx={{ mb: 2 }}>
                   Đã hoàn thành. Mã phiếu: {order.warehouseReceiptCode}
+                </Alert>
+              )}
+
+              {order.type === 'export' && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  Đã xuất hàng thành công
                 </Alert>
               )}
             </CardContent>
@@ -617,7 +842,7 @@ function OrderManager() {
               >
                 Chi tiết
               </Button>
-              {order.status === 'delivered' && (
+              {order.status === 'delivered' && order.type === 'import' && (
                 <Button
                   variant="contained"
                   size="small"
@@ -633,7 +858,7 @@ function OrderManager() {
         </Grid>
       ))}
     </Grid>
-  ), [filteredOrders, formatDate, handleRefresh, handleViewDetail, handleCreateWarehouseReceipt]);
+  ), [filteredOrders, orderCodeSearch, formatDate, handleRefresh, handleViewDetail, handleCreateWarehouseReceipt]);
 
   if (loading) {
     return (
@@ -658,7 +883,7 @@ function OrderManager() {
         <Box display="flex" alignItems="center">
           <AssignmentIcon sx={{ mr: 1, fontSize: 32 }} color="primary" />
           <Typography variant="h4" fontWeight={600} color="text.primary">
-            Quản lý đơn nhập hàng
+            Quản lý đơn hàng
           </Typography>
         </Box>
         
@@ -703,6 +928,18 @@ function OrderManager() {
         </Grid>
         <Grid item xs={6} sm={4} md={2}>
           <Card sx={{ textAlign: 'center', p: 1 }}>
+            <Typography variant="h5" fontWeight={600} color="primary.main">{statusStats.import}</Typography>
+            <Typography variant="caption" color="text.secondary">Nhập hàng</Typography>
+          </Card>
+        </Grid>
+        <Grid item xs={6} sm={4} md={2}>
+          <Card sx={{ textAlign: 'center', p: 1 }}>
+            <Typography variant="h5" fontWeight={600} color="success.main">{statusStats.export}</Typography>
+            <Typography variant="caption" color="text.secondary">Xuất hàng</Typography>
+          </Card>
+        </Grid>
+        <Grid item xs={6} sm={4} md={2}>
+          <Card sx={{ textAlign: 'center', p: 1 }}>
             <Typography variant="h5" fontWeight={600} color="warning.main">{statusStats.processing}</Typography>
             <Typography variant="caption" color="text.secondary">Đang xử lý</Typography>
           </Card>
@@ -719,18 +956,6 @@ function OrderManager() {
             <Typography variant="caption" color="text.secondary">Hoàn thành</Typography>
           </Card>
         </Grid>
-        <Grid item xs={6} sm={4} md={2}>
-          <Card sx={{ textAlign: 'center', p: 1 }}>
-            <Typography variant="h5" fontWeight={600} color="default">{statusStats.draft}</Typography>
-            <Typography variant="caption" color="text.secondary">Nháp</Typography>
-          </Card>
-        </Grid>
-        <Grid item xs={6} sm={4} md={2}>
-          <Card sx={{ textAlign: 'center', p: 1 }}>
-            <Typography variant="h5" fontWeight={600} color="error.main">{statusStats.cancelled}</Typography>
-            <Typography variant="caption" color="text.secondary">Đã hủy</Typography>
-          </Card>
-        </Grid>
       </Grid>
 
       {/* Filters */}
@@ -742,7 +967,52 @@ function OrderManager() {
           </Typography>
         </Box>
         
-        <Grid container spacing={2} alignItems="center" wrap="wrap">
+        <Grid container spacing={2} alignItems="center">
+          {/* NEW: Order Code Search */}
+          <Grid item sx={{ width: 250 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Tìm mã đơn hàng"
+              value={orderCodeSearch}
+              onChange={handleOrderCodeSearchChange}
+              placeholder="Nhập mã đơn hàng..."
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+                endAdornment: orderCodeSearch && (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={handleClearOrderCodeSearch}
+                      edge="end"
+                    >
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
+
+          <Grid item sx={{ width: 200 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Loại đơn hàng</InputLabel>
+              <Select
+                value={orderType}
+                onChange={handleOrderTypeChange}
+                label="Loại đơn hàng"
+              >
+                <MenuItem value="all">Tất cả ({statusStats.all})</MenuItem>
+                <MenuItem value="import">Nhập hàng ({statusStats.import})</MenuItem>
+                <MenuItem value="export">Xuất hàng ({statusStats.export})</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          
           <Grid item sx={{ width: 240 }}>
             <FormControl fullWidth size="small">
               <InputLabel>Trạng thái đơn hàng</InputLabel>
@@ -763,11 +1033,11 @@ function OrderManager() {
           
           <Grid item sx={{ width: 220 }}>
             <FormControl fullWidth size="small">
-              <InputLabel>Nhà cung cấp</InputLabel>
+              <InputLabel>Khách hàng/NCC</InputLabel>
               <Select
                 value={supplierFilter}
                 onChange={handleSupplierFilterChange}
-                label="Nhà cung cấp"
+                label="Khách hàng/NCC"
               >
                 <MenuItem value="">Tất cả</MenuItem>
                 {suppliers.map((supplier) => (
@@ -782,6 +1052,14 @@ function OrderManager() {
           <Grid item sx={{ width: 150 }}>
             <Typography variant="body2" color="text.secondary">
               Hiển thị: <strong>{filteredOrders.length}</strong> đơn hàng
+              {orderCodeSearch && (
+                <>
+                  <br />
+                  <Typography variant="caption" color="primary.main">
+                    Tìm kiếm: "{orderCodeSearch}"
+                  </Typography>
+                </>
+              )}
             </Typography>
           </Grid>
           
@@ -789,10 +1067,7 @@ function OrderManager() {
             <Button 
               size="small" 
               variant="outlined" 
-              onClick={() => {
-                setStatusFilter('all');
-                setSupplierFilter('');
-              }}
+              onClick={handleClearAllFilters}
             >
               Xóa bộ lọc
             </Button>
@@ -804,10 +1079,16 @@ function OrderManager() {
       {filteredOrders.length === 0 && (
         <Paper sx={{ p: 4, textAlign: 'center', mb: 3 }}>
           <Typography variant="h6" color="text.secondary" gutterBottom>
-            Không tìm thấy đơn hàng
+            {orderCodeSearch ? 
+              `Không tìm thấy đơn hàng với mã "${orderCodeSearch}"` : 
+              'Không tìm thấy đơn hàng'
+            }
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Thử thay đổi bộ lọc hoặc tạo đơn hàng mới
+            {orderCodeSearch ? 
+              'Thử kiểm tra lại mã đơn hàng hoặc thay đổi bộ lọc' :
+              'Thử thay đổi bộ lọc hoặc tạo đơn hàng mới'
+            }
           </Typography>
         </Paper>
       )}
@@ -827,6 +1108,16 @@ function OrderManager() {
         open={showWarehouseDialog}
         onClose={handleCloseWarehouseDialog}
         order={selectedOrder}
+      />
+
+      {/* Notification Snackbar */}
+      <NotificationSnackbar
+        open={notification.open}
+        message={notification.message}
+        severity={notification.severity}
+        autoHideDuration={notification.autoHideDuration}
+        onClose={hideNotification}
+        title={notification.title}
       />
     </Box>
   );
