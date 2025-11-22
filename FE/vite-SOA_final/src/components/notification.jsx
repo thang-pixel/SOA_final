@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import {
   IconButton,
   Badge,
@@ -14,7 +15,10 @@ import {
   Divider,
   Button,
   Chip,
-  Paper
+  Paper,
+  Tabs,
+  Tab,
+  Avatar
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
@@ -22,7 +26,12 @@ import {
   CheckCircle as SuccessIcon,
   Warning as WarningIcon,
   Error as ErrorIcon,
-  MarkEmailRead as MarkReadIcon
+  MarkEmailRead as MarkReadIcon,
+  ShoppingCart as ImportIcon,
+  Receipt as ExportIcon,
+  Inventory as WarehouseIcon,
+  Business as SupplierIcon,
+  Person as CustomerIcon
 } from '@mui/icons-material';
 import {
   fetchNotifications,
@@ -32,9 +41,11 @@ import {
 
 const NotificationDropdown = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { notifications, unreadCount, loading } = useSelector(state => state.notification);
 
   const [anchorEl, setAnchorEl] = useState(null);
+  const [selectedTab, setSelectedTab] = useState(0); // 0: Tất cả, 1: Nhập hàng, 2: Xuất hàng
   const open = Boolean(anchorEl);
 
   useEffect(() => {
@@ -54,11 +65,29 @@ const NotificationDropdown = () => {
 
   const handleClose = () => {
     setAnchorEl(null);
+    setSelectedTab(0); // Reset về tab đầu tiên
+  };
+
+  const handleTabChange = (event, newValue) => {
+    setSelectedTab(newValue);
   };
 
   const handleNotificationClick = (notification) => {
     if (!notification.isRead) {
       dispatch(markNotificationAsRead(notification._id));
+    }
+
+    // Navigate based on notification type
+    if (notification.metadata) {
+      const { type, receiptCode, orderCode } = notification.metadata;
+      
+      if (type === 'export' && receiptCode) {
+        handleClose();
+        navigate(`/order?filter=export&search=${receiptCode}`);
+      } else if (orderCode) {
+        handleClose();
+        navigate(`/order?filter=import&search=${orderCode}`);
+      }
     }
   };
 
@@ -66,9 +95,64 @@ const NotificationDropdown = () => {
     dispatch(markAllNotificationsAsRead());
   };
 
-  const getNotificationIcon = (type) => {
+  const handleViewAllNotifications = () => {
+    handleClose();
+    navigate('/user/notifications');
+  };
+
+  // Lọc notifications theo tab
+  const filteredNotifications = React.useMemo(() => {
+    let filtered = notifications;
+
+    if (selectedTab === 1) {
+      // Chỉ notifications liên quan đến nhập hàng
+      filtered = notifications.filter(notification => {
+        const metadata = notification.metadata || {};
+        return metadata.type !== 'export' && (
+          notification.title.toLowerCase().includes('nhập') ||
+          notification.title.toLowerCase().includes('cung cấp') ||
+          notification.message.toLowerCase().includes('nhập') ||
+          metadata.action === 'confirmed' ||
+          metadata.action === 'rejected' ||
+          metadata.action === 'create_warehouse_receipt'
+        );
+      });
+    } else if (selectedTab === 2) {
+      // Chỉ notifications liên quan đến xuất hàng
+      filtered = notifications.filter(notification => {
+        const metadata = notification.metadata || {};
+        return metadata.type === 'export' || 
+               notification.title.toLowerCase().includes('xuất') ||
+               notification.message.toLowerCase().includes('xuất');
+      });
+    }
+
+    return filtered;
+  }, [notifications, selectedTab]);
+
+  const getNotificationIcon = (notification) => {
     const iconProps = { fontSize: 'small' };
-    switch (type) {
+    const metadata = notification.metadata || {};
+
+    // Icon dựa trên loại hoạt động
+    if (metadata.type === 'export') {
+      return <ExportIcon {...iconProps} sx={{ color: 'success.main' }} />;
+    }
+    
+    if (metadata.action === 'create_warehouse_receipt') {
+      return <WarehouseIcon {...iconProps} sx={{ color: 'info.main' }} />;
+    }
+
+    if (notification.title.toLowerCase().includes('cung cấp')) {
+      return <SupplierIcon {...iconProps} sx={{ color: 'primary.main' }} />;
+    }
+
+    if (notification.title.toLowerCase().includes('nhập')) {
+      return <ImportIcon {...iconProps} sx={{ color: 'primary.main' }} />;
+    }
+
+    // Icon mặc định theo type
+    switch (notification.type) {
       case 'success':
         return <SuccessIcon {...iconProps} sx={{ color: 'success.main' }} />;
       case 'warning':
@@ -93,6 +177,28 @@ const NotificationDropdown = () => {
     }
   };
 
+  const getActivityLabel = (notification) => {
+    const metadata = notification.metadata || {};
+    
+    if (metadata.type === 'export') {
+      return 'Xuất hàng';
+    }
+    
+    if (metadata.action === 'create_warehouse_receipt') {
+      return 'Nhập kho';
+    }
+    
+    if (notification.title.toLowerCase().includes('cung cấp')) {
+      return 'Nhà cung cấp';
+    }
+    
+    if (notification.title.toLowerCase().includes('nhập')) {
+      return 'Nhập hàng';
+    }
+    
+    return notification.type;
+  };
+
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -107,6 +213,22 @@ const NotificationDropdown = () => {
     if (diffDays < 7) return `${diffDays} ngày trước`;
     return date.toLocaleDateString('vi-VN');
   };
+
+  // Tính số lượng notifications theo loại
+  const notificationCounts = React.useMemo(() => {
+    const counts = { all: notifications.length, import: 0, export: 0 };
+    
+    notifications.forEach(notification => {
+      const metadata = notification.metadata || {};
+      if (metadata.type === 'export') {
+        counts.export++;
+      } else {
+        counts.import++;
+      }
+    });
+    
+    return counts;
+  }, [notifications]);
 
   return (
     <>
@@ -129,10 +251,10 @@ const NotificationDropdown = () => {
           horizontal: 'right',
         }}
       >
-        <Paper sx={{ width: 400, maxHeight: 500 }}>
+        <Paper sx={{ width: 450, maxHeight: 600 }}>
           {/* Header */}
           <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-            <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
               <Typography variant="h6" fontWeight={600}>
                 Thông báo
               </Typography>
@@ -152,6 +274,31 @@ const NotificationDropdown = () => {
                 {unreadCount} thông báo chưa đọc
               </Typography>
             )}
+
+            {/* Tabs */}
+            <Tabs 
+              value={selectedTab} 
+              onChange={handleTabChange} 
+              variant="fullWidth"
+              sx={{ mt: 1, minHeight: 40 }}
+            >
+              <Tab 
+                label={`Tất cả (${notificationCounts.all})`} 
+                sx={{ minHeight: 40, textTransform: 'none', fontSize: '0.875rem' }}
+              />
+              <Tab 
+                label={`Nhập hàng (${notificationCounts.import})`}
+                icon={<ImportIcon fontSize="small" />}
+                iconPosition="start"
+                sx={{ minHeight: 40, textTransform: 'none', fontSize: '0.875rem' }}
+              />
+              <Tab 
+                label={`Xuất hàng (${notificationCounts.export})`}
+                icon={<ExportIcon fontSize="small" />}
+                iconPosition="start"
+                sx={{ minHeight: 40, textTransform: 'none', fontSize: '0.875rem' }}
+              />
+            </Tabs>
           </Box>
 
           {/* Content */}
@@ -160,15 +307,19 @@ const NotificationDropdown = () => {
               <ListItem>
                 <ListItemText primary="Đang tải..." />
               </ListItem>
-            ) : notifications.length === 0 ? (
+            ) : filteredNotifications.length === 0 ? (
               <ListItem>
                 <ListItemText
                   primary="Không có thông báo"
-                  secondary="Bạn chưa có thông báo nào"
+                  secondary={
+                    selectedTab === 0 ? "Bạn chưa có thông báo nào" :
+                    selectedTab === 1 ? "Không có thông báo nhập hàng" :
+                    "Không có thông báo xuất hàng"
+                  }
                 />
               </ListItem>
             ) : (
-              notifications.slice(0, 10).map((notification) => (
+              filteredNotifications.slice(0, 10).map((notification) => (
                 <React.Fragment key={notification._id}>
                   <ListItem
                     disablePadding
@@ -181,15 +332,24 @@ const NotificationDropdown = () => {
                       sx={{
                         '&:hover': {
                           backgroundColor: 'action.selected'
-                        }
+                        },
+                        py: 1.5
                       }}
                     >
-                      <ListItemIcon>
-                        {getNotificationIcon(notification.type)}
+                      <ListItemIcon sx={{ minWidth: 40 }}>
+                        <Avatar
+                          sx={{ 
+                            width: 32, 
+                            height: 32, 
+                            bgcolor: notification.isRead ? 'grey.200' : 'primary.light'
+                          }}
+                        >
+                          {getNotificationIcon(notification)}
+                        </Avatar>
                       </ListItemIcon>
                       <ListItemText
                         primary={
-                          <Box display="flex" alignItems="center" gap={1}>
+                          <Box display="flex" alignItems="center" gap={1} mb={0.5}>
                             <Typography
                               variant="body2"
                               fontWeight={notification.isRead ? 400 : 600}
@@ -199,41 +359,64 @@ const NotificationDropdown = () => {
                             </Typography>
                             <Chip
                               size="small"
-                              label={notification.type}
+                              label={getActivityLabel(notification)}
                               color={getTypeColor(notification.type)}
-                              variant="outlined"
+                              variant={notification.isRead ? "outlined" : "filled"}
+                              sx={{ fontSize: '0.75rem' }}
                             />
                           </Box>
                         }
                         secondary={
-                          <>
+                          <Box>
                             <Typography
                               variant="caption"
                               color="text.secondary"
-                              component="span"
-                              display="block"
+                              component="div"
+                              sx={{ mb: 0.5 }}
                             >
                               {notification.message}
                             </Typography>
-                            <Typography
-                              variant="caption"
-                              color="text.disabled"
-                              component="span"
-                              display="block"
-                            >
-                              {formatDate(notification.createdAt)}
-                            </Typography>
-                            {notification.relatedOrderId && (
+                            
+                            <Box display="flex" justifyContent="space-between" alignItems="center">
                               <Typography
                                 variant="caption"
-                                color="primary.main"
+                                color="text.disabled"
                                 component="span"
-                                display="block"
                               >
-                                Đơn hàng: {notification.relatedOrderId}
+                                {formatDate(notification.createdAt)}
                               </Typography>
+                              
+                              {notification.relatedOrderId && (
+                                <Chip
+                                  size="small"
+                                  label={notification.relatedOrderId}
+                                  variant="outlined"
+                                  color="primary"
+                                  sx={{ fontSize: '0.7rem', height: 20 }}
+                                />
+                              )}
+                            </Box>
+
+                            {/* Hiển thị thông tin bổ sung cho export orders */}
+                            {notification.metadata?.type === 'export' && notification.metadata?.totalAmount && (
+                              <Box display="flex" alignItems="center" gap={1} mt={0.5}>
+                                <CustomerIcon fontSize="small" color="action" />
+                                <Typography variant="caption" color="text.secondary">
+                                  {notification.metadata.customerName || 'Khách lẻ'} - {notification.metadata.totalAmount.toLocaleString('vi-VN')}đ
+                                </Typography>
+                              </Box>
                             )}
-                          </>
+
+                            {/* Hiển thị thông tin bổ sung cho import orders */}
+                            {notification.metadata?.supplier && notification.metadata?.type !== 'export' && (
+                              <Box display="flex" alignItems="center" gap={1} mt={0.5}>
+                                <SupplierIcon fontSize="small" color="action" />
+                                <Typography variant="caption" color="text.secondary">
+                                  {notification.metadata.supplier}
+                                </Typography>
+                              </Box>
+                            )}
+                          </Box>
                         }
                       />
                     </ListItemButton>
@@ -249,13 +432,10 @@ const NotificationDropdown = () => {
             <Box sx={{ p: 2, textAlign: 'center', borderTop: '1px solid', borderColor: 'divider' }}>
               <Button
                 variant="text"
-                onClick={() => {
-                  handleClose();
-                  // Navigate to full notification page if needed
-                }}
+                onClick={handleViewAllNotifications}
                 sx={{ textTransform: 'none' }}
               >
-                Xem tất cả thông báo
+                Xem tất cả thông báo ({notifications.length})
               </Button>
             </Box>
           )}

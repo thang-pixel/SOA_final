@@ -7,6 +7,7 @@ import UserLayout from "../layout/User/UserLayout";
 import Inventory from "../pages/user/inventory";
 import ImportOrder from "../pages/user/order"; // Thêm import
 import OrderManager from "../pages/user/order-manager";
+import ExportOrder from "../pages/user/order-export";
 function UserRoute() {
   return (
     <Routes>
@@ -16,6 +17,7 @@ function UserRoute() {
           <Route path="home" element={<Home />} />
           <Route path="inventory" element={<Inventory />} />
           <Route path="user/order" element={<ImportOrder />} />
+          <Route path="user/order-export" element={<ExportOrder />} />
           <Route path="order" element={<OrderManager />} />
         </Route>
       </Route>

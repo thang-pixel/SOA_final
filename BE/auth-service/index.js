@@ -66,37 +66,6 @@ app.post('/login', async (req, res) => {
 
 
 
-// API đăng nhập
-app.post('/login', async (req, res) => {
-  const { username, password } = req.body;
-
-  try {
-    const user = await auth.findOne({ username, password });
-    console.log("User found:", user); 
-    if (!user) {
-      return res.status(401).json({ message: 'tài khoản hoặc mật khẩu không chính xác' });
-    }
-
-    const token = jwt.sign(
-      { username: user.username },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
-    );
-    console.log("Token created:", token);
-    console.log("Decoded token:", jwt.decode(token));
-    const userObj = user.toObject();
-    delete userObj.password;
-    res.json({
-      message: 'Login successful',
-      token,
-      user: userObj,
-    });
-  } catch (error) {
-    console.error('Login error:', error.message);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
 //API đăng ký
 app.post('/register', async (req, res) => {
   const { username, password, email } = req.body;

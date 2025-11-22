@@ -45,6 +45,10 @@ import {
   saveImportOrder,
   submitImportOrder
 } from '../../../redux/action/orderAction';
+import { useNotification } from '../../../hooks/useNotification';
+import { useConfirm } from '../../../hooks/useConfirm';
+import NotificationSnackbar from '../../../components/NotificationSnackbar';
+import ConfirmDialog from '../../../components/ConfirmDialog';
 
 // Component hiển thị các bước
 const OrderSteps = React.memo(({ activeStep }) => {
@@ -76,6 +80,24 @@ function ImportOrder() {
   const { currentImportOrder, loading } = useSelector(state => state.order);
   const { user } = useSelector(state => state.auth);
 
+  // Notification system
+  const {
+    notification,
+    hideNotification,
+    showSuccess,
+    showError,
+    showWarning,
+    showInfo
+  } = useNotification();
+
+  // Confirm dialog system
+  const {
+    confirmState,
+    showConfirm,
+    hideConfirm,
+    setLoading: setConfirmLoading
+  } = useConfirm();
+
   // Danh sách nhà cung cấp mẫu
   const suppliers = useMemo(() => [
     'Công ty TNHH ABC',
@@ -92,44 +114,79 @@ function ImportOrder() {
 
   useEffect(() => {
     if (!currentImportOrder.items.length) {
+      showWarning('Chưa có sản phẩm nào được chọn để nhập hàng');
+      setTimeout(() => navigate('/inventory'), 2000);
+    }
+  }, [currentImportOrder, navigate, showWarning]);
+
+  const handleBack = useCallback(async () => {
+    if (currentImportOrder.items.length > 0) {
+      const confirmed = await showConfirm({
+        title: 'Thoát khỏi trang tạo đơn hàng',
+        message: 'Bạn có chắc chắn muốn thoát? Dữ liệu đang nhập sẽ bị mất.',
+        type: 'warning',
+        confirmText: 'Thoát',
+        cancelText: 'Ở lại'
+      });
+
+      if (confirmed) {
+        dispatch(clearCurrentImportOrder());
+        showInfo('Đã hủy tạo đơn nhập hàng');
+        navigate('/inventory');
+      }
+    } else {
+      dispatch(clearCurrentImportOrder());
       navigate('/inventory');
     }
-  }, [currentImportOrder, navigate]);
-
-  const handleBack = useCallback(() => {
-    dispatch(clearCurrentImportOrder());
-    navigate('/user/inventory');
-  }, [dispatch, navigate]);
+  }, [dispatch, navigate, currentImportOrder.items.length, showConfirm, showInfo]);
 
   const handleQuantityChange = useCallback((index, quantity) => {
+    if (quantity < 0) {
+      showWarning('Số lượng phải lớn hơn 0');
+      return;
+    }
+
     const item = currentImportOrder.items[index];
     const totalPrice = quantity * item.unitPrice * (1 - item.discount / 100);
     
     const updatedItem = {
       ...item,
-      quantity: Math.max(0, quantity),
+      quantity: quantity,
       totalPrice
     };
     
     dispatch(updateImportItem({ index, item: updatedItem }));
-  }, [currentImportOrder.items, dispatch]);
+    
+    if (quantity > 0) {
+      showInfo(`Đã cập nhật số lượng ${item.productName}: ${quantity}`, '', 2000);
+    }
+  }, [currentImportOrder.items, dispatch, showWarning, showInfo]);
 
   const handlePriceChange = useCallback((index, price) => {
+    if (price < 0) {
+      showWarning('Giá phải lớn hơn 0');
+      return;
+    }
+
     const item = currentImportOrder.items[index];
     const totalPrice = item.quantity * price * (1 - item.discount / 100);
     
     const updatedItem = {
       ...item,
-      unitPrice: Math.max(0, price),
+      unitPrice: price,
       totalPrice
     };
     
     dispatch(updateImportItem({ index, item: updatedItem }));
-  }, [currentImportOrder.items, dispatch]);
+    
+    if (price > 0) {
+      showInfo(`Đã cập nhật giá ${item.productName}: ${price.toLocaleString('vi-VN')}đ`, '', 2000);
+    }
+  }, [currentImportOrder.items, dispatch, showWarning, showInfo]);
 
   const handleDiscountChange = useCallback((index, discount) => {
-    const item = currentImportOrder.items[index];
     const discountPercent = Math.min(100, Math.max(0, discount));
+    const item = currentImportOrder.items[index];
     const totalPrice = item.quantity * item.unitPrice * (1 - discountPercent / 100);
     
     const updatedItem = {
@@ -139,70 +196,174 @@ function ImportOrder() {
     };
     
     dispatch(updateImportItem({ index, item: updatedItem }));
-  }, [currentImportOrder.items, dispatch]);
+    
+    if (discountPercent > 0) {
+      showInfo(`Đã áp dụng giảm giá ${discountPercent}% cho ${item.productName}`, '', 2000);
+    }
+  }, [currentImportOrder.items, dispatch, showInfo]);
 
-  const handleRemoveItem = useCallback((index) => {
-    dispatch(removeImportItem(index));
-  }, [dispatch]);
+  const handleRemoveItem = useCallback(async (index) => {
+    const item = currentImportOrder.items[index];
+    
+    const confirmed = await showConfirm({
+      title: 'Xóa sản phẩm',
+      message: `Bạn có chắc chắn muốn xóa "${item.productName}" khỏi đơn hàng?`,
+      type: 'danger',
+      confirmText: 'Xóa',
+      cancelText: 'Hủy'
+    });
+
+    if (confirmed) {
+      dispatch(removeImportItem(index));
+      showSuccess(`Đã xóa "${item.productName}" khỏi đơn hàng`, '', 3000);
+    }
+  }, [currentImportOrder.items, dispatch, showConfirm, showSuccess]);
 
   const handleSupplierChange = useCallback((event, value) => {
     dispatch(setImportSupplier(value || ''));
-  }, [dispatch]);
+    if (value) {
+      showInfo(`Đã chọn nhà cung cấp: ${value}`, '', 2000);
+    }
+  }, [dispatch, showInfo]);
 
   const handleNotesChange = useCallback((e) => {
     dispatch(setImportNotes(e.target.value));
   }, [dispatch]);
 
-  const handleSaveDraft = useCallback(async () => {
-    try {
-      if (!currentImportOrder.supplier) {
-        alert('Vui lòng chọn nhà cung cấp');
-        return;
-      }
-
-      if (currentImportOrder.items.some(item => item.quantity <= 0)) {
-        alert('Vui lòng nhập số lượng cho tất cả sản phẩm');
-        return;
-      }
-
-      await dispatch(saveImportOrder(currentImportOrder, user.username || 'admin'));
-      alert('Lưu đơn nhập hàng thành công');
-      dispatch(clearCurrentImportOrder());
-      navigate('/user/order-manager');
-    } catch (error) {
-      alert('Lỗi khi lưu đơn nhập hàng: ' + error.message);
+  const validateOrder = useCallback(() => {
+    if (!currentImportOrder.supplier.trim()) {
+      showWarning('Vui lòng chọn nhà cung cấp trước khi lưu đơn hàng', 5000);
+      return false;
     }
-  }, [currentImportOrder, dispatch, user, navigate]);
+
+    if (currentImportOrder.items.length === 0) {
+      showWarning('Đơn hàng phải có ít nhất một sản phẩm', 5000);
+      return false;
+    }
+
+    const invalidItems = currentImportOrder.items.filter(item => item.quantity <= 0 || item.unitPrice <= 0);
+    if (invalidItems.length > 0) {
+      showWarning('Vui lòng nhập số lượng và giá hợp lệ cho tất cả sản phẩm (> 0)', 6000);
+      return false;
+    }
+
+    return true;
+  }, [currentImportOrder, showWarning]);
+
+  const handleSaveDraft = useCallback(async () => {
+    if (!validateOrder()) return;
+
+    const confirmed = await showConfirm({
+      title: 'Lưu đơn hàng tạm',
+      message: `Lưu đơn nhập hàng từ ${currentImportOrder.supplier} với ${currentImportOrder.items.length} sản phẩm?`,
+      type: 'question',
+      confirmText: 'Lưu tạm',
+      cancelText: 'Hủy'
+    });
+
+    if (!confirmed) return;
+
+    try {
+      setConfirmLoading(true);
+      const result = await dispatch(saveImportOrder(currentImportOrder, user.username || 'admin'));
+      
+      showSuccess(
+        `Đơn nhập hàng ${result.orderCode} đã được lưu thành công! Bạn có thể tiếp tục chỉnh sửa sau.`,
+        'Lưu thành công',
+        6000
+      );
+      
+      dispatch(clearCurrentImportOrder());
+      setTimeout(() => navigate('/user/order-manager'), 2000);
+    } catch (error) {
+      showError(
+        `Lỗi khi lưu đơn nhập hàng: ${error.message}`,
+        'Lưu thất bại',
+        8000
+      );
+    } finally {
+      setConfirmLoading(false);
+    }
+  }, [currentImportOrder, dispatch, user, navigate, validateOrder, showConfirm, showSuccess, showError, setConfirmLoading]);
 
   const handleSubmit = useCallback(async () => {
+    if (!validateOrder()) return;
+
+    const confirmed = await showConfirm({
+      title: 'Gửi đơn hàng cho nhà cung cấp',
+      message: `Gửi đơn nhập hàng đến ${currentImportOrder.supplier}? Sau khi gửi, đơn hàng sẽ được nhà cung cấp xử lý và không thể chỉnh sửa.`,
+      type: 'warning',
+      confirmText: 'Gửi đơn hàng',
+      cancelText: 'Hủy'
+    });
+
+    if (!confirmed) return;
+
     try {
-      if (!currentImportOrder.supplier) {
-        alert('Vui lòng chọn nhà cung cấp');
-        return;
-      }
-
-      if (currentImportOrder.items.some(item => item.quantity <= 0)) {
-        alert('Vui lòng nhập số lượng cho tất cả sản phẩm');
-        return;
-      }
-
-      await dispatch(submitImportOrder(currentImportOrder, user.username || 'admin'));
+      setConfirmLoading(true);
+      const result = await dispatch(submitImportOrder(currentImportOrder, user.username || 'admin'));
       
-      alert('Gửi đơn nhập hàng thành công! Đơn hàng đang được nhà cung cấp xử lý.');
+      showSuccess(
+        `Đơn nhập hàng ${result.orderCode} đã được gửi thành công! Đơn hàng đang được ${currentImportOrder.supplier} xử lý. Bạn sẽ nhận được thông báo khi có phản hồi.`,
+        'Gửi đơn thành công',
+        10000
+      );
+      
       dispatch(clearCurrentImportOrder());
-      navigate('/user/order-manager');
+      setTimeout(() => navigate('/user/order-manager'), 3000);
     } catch (error) {
-      alert('Lỗi khi gửi đơn nhập hàng: ' + error.message);
+      showError(
+        `Lỗi khi gửi đơn nhập hàng: ${error.message}`,
+        'Gửi đơn thất bại',
+        10000
+      );
+    } finally {
+      setConfirmLoading(false);
     }
-  }, [currentImportOrder, dispatch, user, navigate]);
+  }, [currentImportOrder, dispatch, user, navigate, validateOrder, showConfirm, showSuccess, showError, setConfirmLoading]);
 
   // Tính tổng số lượng và tổng tiền
   const summary = useMemo(() => {
     const totalQuantity = currentImportOrder.items.reduce((sum, item) => sum + item.quantity, 0);
     const totalAmount = currentImportOrder.items.reduce((sum, item) => sum + item.totalPrice, 0);
+    const totalDiscount = currentImportOrder.items.reduce((sum, item) => 
+      sum + (item.quantity * item.unitPrice * item.discount / 100), 0);
     
-    return { totalQuantity, totalAmount };
+    return { totalQuantity, totalAmount, totalDiscount };
   }, [currentImportOrder.items]);
+
+  // Kiểm tra nếu không có sản phẩm
+  if (currentImportOrder.items.length === 0) {
+    return (
+      <Box sx={{ p: 3, backgroundColor: '#f8fafc', minHeight: '100vh' }}>
+        <Alert severity="warning" sx={{ mb: 2, maxWidth: 600 }}>
+          <Typography variant="h6" gutterBottom>
+            Chưa có sản phẩm nào được chọn
+          </Typography>
+          <Typography>
+            Vui lòng quay lại trang kho hàng và chọn các sản phẩm cần nhập hàng.
+          </Typography>
+        </Alert>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/user/inventory')}
+          sx={{ textTransform: 'none' }}
+        >
+          Quay lại kho hàng
+        </Button>
+
+        <NotificationSnackbar
+          open={notification.open}
+          message={notification.message}
+          severity={notification.severity}
+          autoHideDuration={notification.autoHideDuration}
+          onClose={hideNotification}
+          title={notification.title}
+        />
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ p: 3, backgroundColor: '#f8fafc', minHeight: '100vh' }}>
@@ -223,19 +384,19 @@ function ImportOrder() {
             variant="outlined"
             startIcon={<SaveIcon />}
             onClick={handleSaveDraft}
-            disabled={loading}
+            disabled={loading || confirmState.loading}
             sx={{ textTransform: 'none' }}
           >
-            Lưu tạm
+            {confirmState.loading ? 'Đang lưu...' : 'Lưu tạm'}
           </Button>
           <Button
             variant="contained"
             startIcon={<SendIcon />}
             onClick={handleSubmit}
-            disabled={loading}
+            disabled={loading || confirmState.loading}
             sx={{ textTransform: 'none' }}
           >
-            Gửi đơn hàng
+            {confirmState.loading ? 'Đang gửi...' : 'Gửi đơn hàng'}
           </Button>
         </Box>
       </Box>
@@ -266,6 +427,8 @@ function ImportOrder() {
                     placeholder="Chọn hoặc nhập nhà cung cấp"
                     size="small"
                     required
+                    error={!currentImportOrder.supplier.trim()}
+                    helperText={!currentImportOrder.supplier.trim() ? 'Vui lòng chọn nhà cung cấp' : ''}
                     InputProps={{
                       ...params.InputProps,
                       startAdornment: (
@@ -304,13 +467,16 @@ function ImportOrder() {
               <Divider sx={{ mb: 2 }} />
               
               <Box display="flex" justifyContent="space-between" mb={1}>
-                <Typography color="text.secondary">Tổng tiền hàng:</Typography>
-                <Typography fontWeight={600}>
-                  {summary.totalAmount.toLocaleString('vi-VN')}đ
-                </Typography>
+                <Typography color="text.secondary">Số sản phẩm:</Typography>
+                <Chip 
+                  label={currentImportOrder.items.length}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                />
               </Box>
               
-              <Box display="flex" justifyContent="space-between" mb={2}>
+              <Box display="flex" justifyContent="space-between" mb={1}>
                 <Typography color="text.secondary">Tổng số lượng:</Typography>
                 <Chip 
                   label={summary.totalQuantity}
@@ -318,6 +484,22 @@ function ImportOrder() {
                   color="primary"
                 />
               </Box>
+              
+              <Box display="flex" justifyContent="space-between" mb={1}>
+                <Typography color="text.secondary">Tổng tiền hàng:</Typography>
+                <Typography fontWeight={600}>
+                  {summary.totalAmount.toLocaleString('vi-VN')}đ
+                </Typography>
+              </Box>
+
+              {summary.totalDiscount > 0 && (
+                <Box display="flex" justifyContent="space-between" mb={1}>
+                  <Typography color="text.secondary">Tổng giảm giá:</Typography>
+                  <Typography fontWeight={600} color="success.main">
+                    -{summary.totalDiscount.toLocaleString('vi-VN')}đ
+                  </Typography>
+                </Box>
+              )}
               
               <Divider sx={{ my: 2 }} />
               
@@ -327,6 +509,14 @@ function ImportOrder() {
                   {summary.totalAmount.toLocaleString('vi-VN')}đ
                 </Typography>
               </Box>
+
+              {currentImportOrder.supplier && (
+                <Box mt={2}>
+                  <Alert severity="info" sx={{ fontSize: '0.875rem' }}>
+                    Đơn hàng sẽ được gửi đến <strong>{currentImportOrder.supplier}</strong>
+                  </Alert>
+                </Box>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -336,7 +526,7 @@ function ImportOrder() {
           <Paper sx={{ p: 0 }}>
             <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
               <Typography variant="h6" fontWeight={600}>
-                Danh sách sản phẩm đặt hàng
+                Danh sách sản phẩm đặt hàng ({currentImportOrder.items.length})
               </Typography>
             </Box>
             
@@ -356,7 +546,14 @@ function ImportOrder() {
                 </TableHead>
                 <TableBody>
                   {currentImportOrder.items.map((item, index) => (
-                    <TableRow key={`${item.productId}-${index}`}>
+                    <TableRow 
+                      key={`${item.productId}-${index}`}
+                      sx={{
+                        backgroundColor: (item.quantity <= 0 || item.unitPrice <= 0) 
+                          ? 'error.light' 
+                          : 'transparent'
+                      }}
+                    >
                       <TableCell>{index + 1}</TableCell>
                       <TableCell>
                         <Typography color="primary" fontWeight={500}>
@@ -373,9 +570,10 @@ function ImportOrder() {
                           type="number"
                           value={item.quantity}
                           onChange={(e) => handleQuantityChange(index, parseInt(e.target.value) || 0)}
-                          inputProps={{ min: 0, style: { textAlign: 'center' } }}
+                          inputProps={{ min: 1, style: { textAlign: 'center' } }}
                           size="small"
                           sx={{ width: 80 }}
+                          error={item.quantity <= 0}
                         />
                       </TableCell>
                       <TableCell align="center">
@@ -383,9 +581,10 @@ function ImportOrder() {
                           type="number"
                           value={item.unitPrice}
                           onChange={(e) => handlePriceChange(index, parseInt(e.target.value) || 0)}
-                          inputProps={{ min: 0, style: { textAlign: 'center' } }}
+                          inputProps={{ min: 1, style: { textAlign: 'center' } }}
                           size="small"
                           sx={{ width: 100 }}
+                          error={item.unitPrice <= 0}
                           InputProps={{
                             endAdornment: <InputAdornment position="end">đ</InputAdornment>
                           }}
@@ -411,6 +610,7 @@ function ImportOrder() {
                           onClick={() => handleRemoveItem(index)}
                           color="error"
                           size="small"
+                          title={`Xóa ${item.productName}`}
                         >
                           <DeleteIcon />
                         </IconButton>
@@ -423,6 +623,29 @@ function ImportOrder() {
           </Paper>
         </Grid>
       </Grid>
+
+      {/* Notification Snackbar */}
+      <NotificationSnackbar
+        open={notification.open}
+        message={notification.message}
+        severity={notification.severity}
+        autoHideDuration={notification.autoHideDuration}
+        onClose={hideNotification}
+        title={notification.title}
+      />
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        open={confirmState.open}
+        onClose={hideConfirm}
+        onConfirm={confirmState.onConfirm}
+        title={confirmState.title}
+        message={confirmState.message}
+        type={confirmState.type}
+        confirmText={confirmState.confirmText}
+        cancelText={confirmState.cancelText}
+        loading={confirmState.loading}
+      />
     </Box>
   );
 }

@@ -51,6 +51,132 @@ const importOrderSchema = new mongoose.Schema({
 
 const ImportOrder = mongoose.model('ImportOrder', importOrderSchema);
 
+
+
+// Schema cho phiếu xuất hàng
+const exportOrderSchema = new mongoose.Schema({
+  receiptCode: { type: String, required: true, unique: true },
+  customerName: { type: String, default: 'Khách hàng' },
+  customerPhone: { type: String, default: '' },
+  items: [{
+    productId: { type: String, required: true },
+    productCode: { type: String, required: true },
+    productName: { type: String, required: true },
+    quantity: { type: Number, required: true },
+    unitPrice: { type: Number, required: true },
+    totalPrice: { type: Number, required: true }
+  }],
+  totalAmount: { type: Number, required: true },
+  paymentMethod: { type: String, enum: ['cash', 'card', 'transfer'], default: 'cash' },
+  status: { type: String, enum: ['completed'], default: 'completed' },
+  createdAt: { type: Date, default: Date.now },
+  createdBy: { type: String, required: true },
+  notes: { type: String }
+});
+
+const ExportOrder = mongoose.model('ExportOrder', exportOrderSchema);
+
+// API tạo phiếu xuất hàng
+app.post('/export/create', async (req, res) => {
+  try {
+    const { items, customerName, customerPhone, paymentMethod, createdBy, notes } = req.body;
+    
+    const receiptCode = `PXH${Date.now()}`;
+    const totalAmount = items.reduce((sum, item) => sum + item.totalPrice, 0);
+    
+    const newExportOrder = new ExportOrder({
+      receiptCode,
+      customerName,
+      customerPhone,
+      items,
+      totalAmount,
+      paymentMethod,
+      notes,
+      createdBy
+    });
+    
+    await newExportOrder.save();
+    
+    // Gửi thông báo qua RabbitMQ
+    await sendNotificationMessage({
+      title: 'Tạo phiếu xuất hàng thành công',
+      message: `Phiếu xuất hàng ${receiptCode} đã được tạo với tổng tiền ${totalAmount.toLocaleString('vi-VN')}đ`,
+      type: 'success',
+      relatedOrderId: receiptCode,
+      metadata: { 
+        receiptCode,
+        totalAmount,
+        customerName,
+        type: 'export'
+      }
+    });
+    
+    res.status(201).json(newExportOrder);
+  } catch (error) {
+    console.error('Error creating export order:', error);
+    res.status(500).json({ message: 'Lỗi tạo phiếu xuất hàng', error: error.message });
+  }
+});
+
+// API lấy danh sách phiếu xuất hàng
+app.get('/export/list', async (req, res) => {
+  try {
+    const orders = await ExportOrder.find().sort({ createdAt: -1 });
+    res.json(orders);
+  } catch (error) {
+    console.error('Error fetching export orders:', error);
+    res.status(500).json({ message: 'Lỗi lấy danh sách phiếu xuất hàng' });
+  }
+});
+
+// API lấy chi tiết phiếu xuất hàng
+app.get('/export/:id', async (req, res) => {
+  try {
+    const order = await ExportOrder.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ message: 'Không tìm thấy phiếu xuất hàng' });
+    }
+    res.json(order);
+  } catch (error) {
+    console.error('Error fetching export order:', error);
+    res.status(500).json({ message: 'Lỗi lấy chi tiết phiếu xuất hàng' });
+  }
+});
+
+// API thống kê xuất hàng theo ngày/tháng
+app.get('/export/stats/:period', async (req, res) => {
+  try {
+    const { period } = req.params; // 'day', 'month', 'year'
+    const now = new Date();
+    let startDate;
+    
+    if (period === 'day') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else if (period === 'month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else {
+      startDate = new Date(now.getFullYear(), 0, 1);
+    }
+    
+    const stats = await ExportOrder.aggregate([
+      { $match: { createdAt: { $gte: startDate } } },
+      {
+        $group: {
+          _id: null,
+          totalOrders: { $sum: 1 },
+          totalRevenue: { $sum: '$totalAmount' },
+          totalItems: { $sum: { $sum: '$items.quantity' } }
+        }
+      }
+    ]);
+    
+    res.json(stats[0] || { totalOrders: 0, totalRevenue: 0, totalItems: 0 });
+  } catch (error) {
+    console.error('Error fetching export stats:', error);
+    res.status(500).json({ message: 'Lỗi lấy thống kê xuất hàng' });
+  }
+});
+
 // RabbitMQ connection
 let rabbitConnection;
 let rabbitChannel;

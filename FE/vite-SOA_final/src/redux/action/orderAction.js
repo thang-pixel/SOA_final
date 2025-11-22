@@ -1,15 +1,28 @@
 import axios from 'axios';
 import API_DOMAIN from '../../constants/apiDomain';
 import {
+  // Import actions
   setCurrentImportOrder,
   setImportOrders,
+  clearCurrentImportOrder,
+  
+  // Export actions
+  setCurrentExportOrder,
+  setExportOrders,
+  setExportStats,
+  clearCurrentExportOrder,
+  
+  // Warehouse actions
   setWarehouseReceipt,
   setWarehouseReceiptCreating,
+  clearWarehouseReceipt,
+  
+  // Shared actions
   setLoading,
   setError,
-  clearCurrentImportOrder,
-  clearWarehouseReceipt
 } from '../reducers/orderSlice';
+
+// ==================== IMPORT ORDER ACTIONS ====================
 
 // Tạo đơn nhập hàng từ các sản phẩm đã chọn
 export const createImportOrder = (selectedProducts) => (dispatch) => {
@@ -83,6 +96,113 @@ export const submitImportOrder = (orderData, createdBy) => async (dispatch) => {
   }
 };
 
+// Lấy danh sách đơn nhập hàng
+export const fetchImportOrders = () => async (dispatch) => {
+  try {
+    dispatch(setLoading(true));
+    
+    const response = await axios.get(`${API_DOMAIN}/api/order/import/list`);
+    dispatch(setImportOrders(response.data));
+    dispatch(setError(null));
+  } catch (error) {
+    console.error('Error fetching import orders:', error);
+    dispatch(setError(error.response?.data?.message || error.message));
+  } finally {
+    dispatch(setLoading(false));
+  }
+};
+
+// ==================== EXPORT ORDER ACTIONS ====================
+
+// Tạo phiếu xuất hàng từ các sản phẩm đã chọn
+export const createExportOrder = (selectedProducts) => (dispatch) => {
+  try {
+    const items = selectedProducts.map(product => ({
+      productId: product._id,
+      productCode: product.code,
+      productName: product.name,
+      quantity: 1, // Mặc định là 1, có thể điều chỉnh
+      unitPrice: product.price,
+      totalPrice: product.price
+    }));
+
+    const exportOrder = {
+      items,
+      customerName: '',
+      customerPhone: '',
+      paymentMethod: 'cash',
+      notes: '',
+      totalAmount: items.reduce((sum, item) => sum + item.totalPrice, 0)
+    };
+
+    dispatch(setCurrentExportOrder(exportOrder));
+  } catch (error) {
+    console.error('Error creating export order:', error);
+    dispatch(setError(error.message));
+  }
+};
+
+// Lưu phiếu xuất hàng
+export const saveExportOrder = (orderData, createdBy) => async (dispatch) => {
+  try {
+    dispatch(setLoading(true));
+    
+    const response = await axios.post(`${API_DOMAIN}/api/order/export/create`, {
+      ...orderData,
+      createdBy
+    });
+
+    // Cập nhật tồn kho cho từng sản phẩm
+    for (const item of orderData.items) {
+      try {
+        await axios.put(`${API_DOMAIN}/api/inventory/product/update-stock/${item.productId}`, {
+          quantity: item.quantity,
+          operation: 'decrease'
+        });
+      } catch (error) {
+        console.error('Error updating inventory:', error);
+      }
+    }
+
+    dispatch(setError(null));
+    return response.data;
+  } catch (error) {
+    console.error('Error saving export order:', error);
+    dispatch(setError(error.response?.data?.message || error.message));
+    throw error;
+  } finally {
+    dispatch(setLoading(false));
+  }
+};
+
+// Lấy danh sách phiếu xuất hàng
+export const fetchExportOrders = () => async (dispatch) => {
+  try {
+    dispatch(setLoading(true));
+    
+    const response = await axios.get(`${API_DOMAIN}/api/order/export/list`);
+    dispatch(setExportOrders(response.data));
+    dispatch(setError(null));
+  } catch (error) {
+    console.error('Error fetching export orders:', error);
+    dispatch(setError(error.response?.data?.message || error.message));
+  } finally {
+    dispatch(setLoading(false));
+  }
+};
+
+// Lấy thống kê xuất hàng
+export const fetchExportStats = (period = 'day') => async (dispatch) => {
+  try {
+    const response = await axios.get(`${API_DOMAIN}/api/order/export/stats/${period}`);
+    dispatch(setExportStats(response.data));
+  } catch (error) {
+    console.error('Error fetching export stats:', error);
+  }
+};
+
+// ==================== WAREHOUSE RECEIPT ACTIONS ====================
+
 // Tạo phiếu nhập kho từ đơn hàng đã giao
 export const createWarehouseReceipt = (order) => (dispatch) => {
   try {
@@ -122,21 +242,5 @@ export const completeWarehouseReceipt = (orderId, actualQuantities, warehouseSta
     throw error;
   } finally {
     dispatch(setWarehouseReceiptCreating(false));
-  }
-};
-
-// Lấy danh sách đơn nhập hàng
-export const fetchImportOrders = () => async (dispatch) => {
-  try {
-    dispatch(setLoading(true));
-    
-    const response = await axios.get(`${API_DOMAIN}/api/order/import/list`);
-    dispatch(setImportOrders(response.data));
-    dispatch(setError(null));
-  } catch (error) {
-    console.error('Error fetching import orders:', error);
-    dispatch(setError(error.response?.data?.message || error.message));
-  } finally {
-    dispatch(setLoading(false));
   }
 };
