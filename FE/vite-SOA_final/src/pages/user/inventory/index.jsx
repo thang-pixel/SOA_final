@@ -174,7 +174,7 @@ const SelectionActions = React.memo(({ selectedCount, onExport, onPrintLabels, o
         onClick={onExport}
         sx={{ textTransform: 'none' }}
       >
-        Xuất file
+        Xuất hàng
       </Button>
       <Button
         variant="outlined"

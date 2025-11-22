@@ -96,6 +96,26 @@ app.post('/login', async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+//API đăng ký
+app.post('/register', async (req, res) => {
+  const { username, password, email } = req.body;
+  try {
+    const existingUser = await auth.findOne({ username });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Tên tài khoản đã tồn tại' });
+    }
+
+    const newUser = new auth({ username, password, email });
+    await newUser.save();
+
+    res.status(201).json({ message: 'Đăng ký thành công' });
+  } catch (error) {
+    console.error('Registration error:', error.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Chạy server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`User Auth Service running on port ${PORT}`));
