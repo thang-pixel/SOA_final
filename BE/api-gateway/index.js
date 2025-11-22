@@ -47,6 +47,16 @@ app.use('/api/notification', createProxyMiddleware({
   },
 }));
 
+// Proxy cho activity-service
+app.use('/api/activity', createProxyMiddleware({
+  target: 'http://localhost:3005',
+  changeOrigin: true,
+  pathRewrite: {
+    '^/api/activity': '',
+  },
+}));
+
+
 const PORT = process.env.PORT || 2000;
 app.listen(PORT, () => {
   console.log(`API Gateway running on port ${PORT}`);

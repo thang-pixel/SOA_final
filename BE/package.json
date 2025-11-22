@@ -4,11 +4,13 @@
   "description": "SOA Final Project Backend",
   "main": "index.js",
   "scripts": {
+    "start:auth": "cd auth-service && npm install && npm run dev",
     "start:gateway": "cd api-gateway && npm install && npm run dev",
     "start:inventory": "cd inventory-service && npm install && npm run dev",
     "start:order": "cd order-service && npm install && npm run dev",
-    "start:auth": "cd auth-service && npm install && npm run dev",
-    "start:all": "concurrently \"npm run start:auth\" \"npm run start:gateway\" \"npm run start:inventory\" \"npm run start:order\" "
+    "start:activity": "cd activity-service && npm install && npm run dev",
+    "start:notification": "cd notification-service && npm install && npm run dev",
+    "start:all": "concurrently \"npm run start:auth\" \"npm run start:gateway\" \"npm run start:inventory\" \"npm run start:order\" \"npm run start:activity\" \"npm run start:notification\""
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

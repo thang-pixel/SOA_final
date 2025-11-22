@@ -44,7 +44,7 @@ const drawerClosedWidth = 65;
 // Danh sách menu items
 const menuItems = [
   { text: 'Trang chủ', icon: <DashboardIcon />, path: '/admin/dashboard' },
-  { text: 'Đơn hàng', icon: <ShoppingCartIcon />, path: '/admin/orders' },
+  { text: 'Quản lý tài khoản', icon: <AccountCircleIcon />, path: '/admin/accounts' },
   { text: 'Sản phẩm tồn kho', icon: <InventoryIcon />, path: '/admin/inventory' },
   { text: 'Nhập kho', icon: <AddIcon />, path: '/admin/import' },
   { text: 'Xuất kho', icon: <RemoveIcon />, path: '/admin/export' },
@@ -174,6 +174,7 @@ function AdminLayout() {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.leavingScreen,
           }),
+          boxSizing: 'border-box',
         }}
       >
         <Toolbar>
@@ -284,6 +285,7 @@ function AdminLayout() {
           width: isMobile ? '100%' : `calc(100% - ${open ? drawerWidth : drawerClosedWidth}px)`,
           minHeight: '100vh',
           backgroundColor: '#f5f5f5',
+          overflowX: 'hidden',
         }}
       >
         <Toolbar /> {/* Spacer cho AppBar */}

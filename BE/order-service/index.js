@@ -51,6 +51,20 @@ const importOrderSchema = new mongoose.Schema({
 
 const ImportOrder = mongoose.model('ImportOrder', importOrderSchema);
 
+// Helper function để log hoạt động
+async function logActivity(username, action, description, metadata = {}) {
+  try {
+    await axios.post('http://localhost:3005/activity/log', {
+      username,
+      action,
+      description,
+      metadata,
+      timestamp: new Date()
+    });
+  } catch (error) {
+    console.error('Error logging activity:', error.message);
+  }
+}
 
 
 // Schema cho phiếu xuất hàng
@@ -269,6 +283,15 @@ app.post('/import/create', async (req, res) => {
     });
     
     await newOrder.save();
+    
+    // Log hoạt động tạo đơn nhập hàng
+    await logActivity(createdBy, 'create_import_order', `Đã tạo đơn nhập hàng ${orderCode} từ nhà cung cấp ${supplier}`, {
+      orderCode,
+      supplier,
+      totalAmount,
+      itemCount: items.length
+    });
+    
     res.status(201).json(newOrder);
   } catch (error) {
     console.error('Error creating import order:', error);
@@ -294,6 +317,12 @@ app.put('/import/submit/:id', async (req, res) => {
     order.status = 'processing';
     order.processedAt = new Date();
     await order.save();
+    
+    // Log hoạt động gửi đơn hàng
+    await logActivity(order.createdBy, 'submit_import_order', `Đã gửi đơn nhập hàng ${order.orderCode} cho nhà cung cấp xử lý`, {
+      orderCode: order.orderCode,
+      supplier: order.supplier
+    });
     
     // Gửi email đến nhà cung cấp qua RabbitMQ
     await sendEmailMessage({
@@ -377,6 +406,13 @@ app.put('/import/create-receipt/:id', async (req, res) => {
     order.completedAt = new Date();
     order.warehouseReceiptCode = warehouseReceiptCode;
     await order.save();
+    
+    // Log hoạt động tạo phiếu nhập kho
+    await logActivity(warehouseStaff, 'create_warehouse_receipt', `Đã tạo phiếu nhập kho ${warehouseReceiptCode} cho đơn hàng ${order.orderCode}`, {
+      orderCode: order.orderCode,
+      warehouseReceiptCode,
+      totalItems: actualQuantities.length
+    });
     
     // Gửi thông báo hoàn thành qua RabbitMQ
     await sendNotificationMessage({
