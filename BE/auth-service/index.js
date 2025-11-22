@@ -12,18 +12,18 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-mongoose.connect(process.env.MONGO_URI, { 
-    useNewUrlParser: true, 
-    useUnifiedTopology: true
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
 }).then(() => console.log('MongoDB connected'))
-    .catch(err => console.log(err));
+  .catch(err => console.log(err));
 
 const authSchema = new mongoose.Schema({
-    username: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
-    email: { type: String, required: true },
-    role: { type: String, enum: ['user', 'admin'], default: 'user' },
-});
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  email: { type: String, required: true },
+  role: { type: String, enum: ['user', 'admin'], default: 'user' },
+}, { versionKey: false });
 
 
 
@@ -37,7 +37,7 @@ app.post('/login', async (req, res) => {
 
   try {
     const user = await auth.findOne({ username, password });
-    console.log("User found:", user); 
+    console.log("User found:", user);
     if (!user) {
       return res.status(401).json({ message: 'tài khoản hoặc mật khẩu không chính xác' });
     }
@@ -72,7 +72,7 @@ app.post('/login', async (req, res) => {
 
   try {
     const user = await auth.findOne({ username, password });
-    console.log("User found:", user); 
+    console.log("User found:", user);
     if (!user) {
       return res.status(401).json({ message: 'tài khoản hoặc mật khẩu không chính xác' });
     }
@@ -96,6 +96,64 @@ app.post('/login', async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+//API đăng ký
+app.post('/register', async (req, res) => {
+  const { username, password, email } = req.body;
+  try {
+    const existingUser = await auth.findOne({ username });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Tên tài khoản đã tồn tại' });
+    }
+
+    const newUser = new auth({ username, password, email });
+    await newUser.save();
+
+    res.status(201).json({ message: 'Đăng ký thành công' });
+  } catch (error) {
+    console.error('Registration error:', error.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// API Lấy danh sách tất cả user (GET /users)
+app.get('/users', async (req, res) => {
+  try {
+    const users = await auth.find().select('-password -__v'); 
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+
+// API Cập nhật thông tin user (PUT /users/:id)
+app.put('/users/:id', async (req, res) => {
+  try {
+    const { email, role } = req.body;
+    const updatedUser = await auth.findByIdAndUpdate(
+      req.params.id,
+      { email, role },
+      { new: true } // Trả về document đã được cập nhật
+    ).select('-password -__v');
+
+    if (!updatedUser) return res.status(404).json({ message: 'Không tìm thấy user' });
+    res.json(updatedUser);
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi cập nhật' });
+  }
+});
+
+// API Xóa user (DELETE /users/:id)
+app.delete('/users/:id', async (req, res) => {
+  try {
+    const deletedUser = await auth.findByIdAndDelete(req.params.id);
+    if (!deletedUser) return res.status(404).json({ message: 'Không tìm thấy user' });
+    res.json({ message: 'Xóa thành công' });
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi xóa user' });
+  }
+});
+
 // Chạy server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`User Auth Service running on port ${PORT}`));

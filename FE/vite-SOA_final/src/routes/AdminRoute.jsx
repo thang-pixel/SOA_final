@@ -3,6 +3,7 @@ import AdminLayout from "../layout/Admin/AdminLayout";
 import Dashboard from "../pages/admin/Dashboard";
 import PrivateRoute from "./PrivateRoute";
 import ErrorPage from "../pages/ErrorPage";
+import AccountManagement from "../pages/admin/AccountManagement";
 function AdminRoute() {
   return (
     <Routes>
@@ -11,6 +12,7 @@ function AdminRoute() {
           <Route index element={<Dashboard />} /> {/* Trang chủ admin */}
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="orders" element={<div>Trang đơn hàng</div>} />
+          <Route path="accounts" element={<AccountManagement />} />
           <Route path="inventory" element={<div>Trang sản phẩm tồn kho</div>} />
           <Route path="import" element={<div>Trang nhập kho</div>} />
           <Route path="export" element={<div>Trang xuất kho</div>} />
