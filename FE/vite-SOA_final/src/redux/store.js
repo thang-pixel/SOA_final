@@ -4,7 +4,7 @@ import authReducer from './reducers/authSlice'
 import inventoryReducer from './reducers/inventorySlice'
 import orderReducer from './reducers/orderSlice'
 import notificationReducer from './reducers/notificationSlice'
-import activityReducer from './reducers/activitySlice'
+import reportSlice from './reducers/reportSlice'
 export const store = configureStore({
   reducer: {
     user: userReducer,
@@ -12,7 +12,7 @@ export const store = configureStore({
     inventory: inventoryReducer,
     order: orderReducer,
     notification: notificationReducer,
-    activity: activityReducer,
+    report: reportSlice,
   
   },
 })

@@ -48,7 +48,10 @@ import {
   Receipt as ReceiptIcon,
   Person as PersonIcon,
   Search as SearchIcon,
-  Clear as ClearIcon
+  Clear as ClearIcon,
+  Sort as SortIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon
 } from '@mui/icons-material';
 import {
   fetchImportOrders,
@@ -437,11 +440,12 @@ function OrderManager() {
   const [showWarehouseDialog, setShowWarehouseDialog] = useState(false);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   
-  // State cho filters - bao gồm cả order code search
+  // State cho filters - bao gồm cả order code search và sort order
   const [orderType, setOrderType] = useState('all'); // 'all', 'import', 'export'
   const [statusFilter, setStatusFilter] = useState('all');
   const [supplierFilter, setSupplierFilter] = useState('');
-  const [orderCodeSearch, setOrderCodeSearch] = useState(''); // NEW: Tìm kiếm theo mã đơn hàng
+  const [orderCodeSearch, setOrderCodeSearch] = useState('');
+  const [sortOrder, setSortOrder] = useState('newest'); // 'newest' hoặc 'oldest'
   
   // State cho view mode
   const [viewMode, setViewMode] = useState('cards'); // 'cards' hoặc 'table'
@@ -511,9 +515,18 @@ function OrderManager() {
       combined = [...combined, ...exportOrdersWithType];
     }
     
-    // Sắp xếp theo thời gian tạo
-    return combined.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [importOrders, exportOrders, orderType]);
+    // Sắp xếp theo thời gian tạo dựa trên sortOrder
+    return combined.sort((a, b) => {
+      const dateA = new Date(a.createdAt);
+      const dateB = new Date(b.createdAt);
+      
+      if (sortOrder === 'newest') {
+        return dateB - dateA; // Mới nhất trước
+      } else {
+        return dateA - dateB; // Cũ nhất trước
+      }
+    });
+  }, [importOrders, exportOrders, orderType, sortOrder]);
 
   // Lọc theo filters bao gồm cả order code search
   const filteredOrders = useMemo(() => {
@@ -522,7 +535,7 @@ function OrderManager() {
       const matchSupplier = !supplierFilter || 
         (order.supplier && order.supplier.toLowerCase().includes(supplierFilter.toLowerCase()));
       
-      // NEW: Lọc theo mã đơn hàng
+      // Lọc theo mã đơn hàng
       const orderCode = order.orderCode || order.receiptCode || '';
       const matchOrderCode = !orderCodeSearch || 
         orderCode.toLowerCase().includes(orderCodeSearch.toLowerCase());
@@ -564,8 +577,7 @@ function OrderManager() {
   const handleRefresh = useCallback(() => {
     dispatch(fetchImportOrders());
     dispatch(fetchExportOrders());
-    showInfo('Đã làm mới danh sách đơn hàng', '', 2000);
-  }, [dispatch, showInfo]);
+  }, [dispatch]);
 
   const handleCreateWarehouseReceipt = useCallback((order) => {
     setSelectedOrder(order);
@@ -600,16 +612,21 @@ function OrderManager() {
     setSupplierFilter(event.target.value);
   }, []);
 
-  // NEW: Handler cho search order code
   const handleOrderCodeSearchChange = useCallback((event) => {
     setOrderCodeSearch(event.target.value);
   }, []);
 
-  // NEW: Clear order code search
   const handleClearOrderCodeSearch = useCallback(() => {
     setOrderCodeSearch('');
     showInfo('Đã xóa bộ lọc mã đơn hàng', '', 2000);
   }, [showInfo]);
+
+  // NEW: Handler cho sort order
+  const handleSortOrderChange = useCallback((event) => {
+    setSortOrder(event.target.value);
+    const sortText = event.target.value === 'newest' ? 'mới nhất trước' : 'cũ nhất trước';
+
+  }, );
 
   const handleViewModeChange = useCallback((event, newViewMode) => {
     if (newViewMode !== null) {
@@ -628,8 +645,9 @@ function OrderManager() {
     setStatusFilter('all');
     setSupplierFilter('');
     setOrderCodeSearch('');
-    showInfo('Đã xóa tất cả bộ lọc', '', 2000);
-  }, [showInfo]);
+    setSortOrder('newest');
+
+  },);
 
   // Render Table view
   const renderTableView = useCallback(() => (
@@ -644,7 +662,15 @@ function OrderManager() {
               <TableCell align="center">Trạng thái</TableCell>
               <TableCell align="right">Tổng tiền</TableCell>
               <TableCell align="center">Số SP</TableCell>
-              <TableCell>Thời gian tạo</TableCell>
+              <TableCell>
+                <Box display="flex" alignItems="center" gap={1}>
+                  Thời gian tạo
+                  {sortOrder === 'newest' ? 
+                    <ArrowDownwardIcon fontSize="small" color="primary" /> :
+                    <ArrowUpwardIcon fontSize="small" color="primary" />
+                  }
+                </Box>
+              </TableCell>
               <TableCell align="center">Đặc biệt</TableCell>
               <TableCell align="center">Thao tác</TableCell>
             </TableRow>
@@ -754,7 +780,7 @@ function OrderManager() {
         </Table>
       </TableContainer>
     </Paper>
-  ), [filteredOrders, orderCodeSearch, formatDate, handleRefresh, handleViewDetail, handleCreateWarehouseReceipt]);
+  ), [filteredOrders, orderCodeSearch, sortOrder, formatDate, handleRefresh, handleViewDetail, handleCreateWarehouseReceipt]);
 
   // Render Cards view
   const renderCardsView = useCallback(() => (
@@ -963,12 +989,12 @@ function OrderManager() {
         <Box display="flex" alignItems="center" gap={1} mb={2}>
           <FilterIcon color="action" />
           <Typography variant="h6" fontWeight={600}>
-            Bộ lọc
+            Bộ lọc và sắp xếp
           </Typography>
         </Box>
         
         <Grid container spacing={2} alignItems="center">
-          {/* NEW: Order Code Search */}
+          {/* Order Code Search */}
           <Grid item sx={{ width: 250 }}>
             <TextField
               fullWidth
@@ -1048,6 +1074,32 @@ function OrderManager() {
               </Select>
             </FormControl>
           </Grid>
+
+          {/* NEW: Sort Order Filter */}
+          <Grid item sx={{ width: 220 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Sắp xếp thời gian</InputLabel>
+              <Select
+                value={sortOrder}
+                onChange={handleSortOrderChange}
+                label="Sắp xếp thời gian"
+                startAdornment={<SortIcon fontSize="small" sx={{ mr: 1 }} />}
+              >
+                <MenuItem value="newest">
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <ArrowDownwardIcon fontSize="small" />
+                    Mới nhất trước
+                  </Box>
+                </MenuItem>
+                <MenuItem value="oldest">
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <ArrowUpwardIcon fontSize="small" />
+                    Cũ nhất trước
+                  </Box>
+                </MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
           
           <Grid item sx={{ width: 150 }}>
             <Typography variant="body2" color="text.secondary">
@@ -1060,6 +1112,10 @@ function OrderManager() {
                   </Typography>
                 </>
               )}
+              <br />
+              <Typography variant="caption" color="text.secondary">
+                Sắp xếp: {sortOrder === 'newest' ? 'Mới → Cũ' : 'Cũ → Mới'}
+              </Typography>
             </Typography>
           </Grid>
           

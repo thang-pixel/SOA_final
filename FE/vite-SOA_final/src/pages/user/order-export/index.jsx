@@ -123,8 +123,7 @@ function ExportOrder() {
     };
     
     dispatch(updateExportItem({ index, item: updatedItem }));
-    showInfo(`Đã cập nhật số lượng ${item.productName}: ${quantity}`, '', 2000);
-  }, [currentExportOrder.items, dispatch, showWarning, showInfo]);
+  }, [currentExportOrder.items, dispatch, showWarning]);
 
   const handleRemoveItem = useCallback(async (index) => {
     const item = currentExportOrder.items[index];
@@ -162,8 +161,7 @@ function ExportOrder() {
     
     const methodText = method === 'cash' ? 'Tiền mặt' : 
                       method === 'card' ? 'Thẻ' : 'Chuyển khoản';
-    showInfo(`Phương thức thanh toán: ${methodText}`, '', 2000);
-  }, [dispatch, showInfo]);
+  }, [dispatch]);
 
   const handleNotesChange = useCallback((e) => {
     dispatch(setExportNotes(e.target.value));

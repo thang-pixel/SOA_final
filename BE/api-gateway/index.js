@@ -57,6 +57,15 @@ app.use('/api/activity', createProxyMiddleware({
 }));
 
 
+// Proxy cho report-service
+app.use('/api/report', createProxyMiddleware({
+  target: 'http://localhost:3006',
+  changeOrigin: true,
+  pathRewrite: {
+    '^/api/report': '',
+  },
+}));
+
 const PORT = process.env.PORT || 2000;
 app.listen(PORT, () => {
   console.log(`API Gateway running on port ${PORT}`);

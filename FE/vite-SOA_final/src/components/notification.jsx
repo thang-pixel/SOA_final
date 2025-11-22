@@ -18,7 +18,8 @@ import {
   Paper,
   Tabs,
   Tab,
-  Avatar
+  Avatar,
+  Tooltip
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
@@ -31,13 +32,17 @@ import {
   Receipt as ExportIcon,
   Inventory as WarehouseIcon,
   Business as SupplierIcon,
-  Person as CustomerIcon
+  Person as CustomerIcon,
+  PictureAsPdf as ReportIcon,
+  Download as DownloadIcon,
+  Assessment as AnalyticsIcon
 } from '@mui/icons-material';
 import {
   fetchNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead
 } from '../redux/action/notificationAction';
+import { handleReportCompletion } from '../redux/action/reportAction';
 
 const NotificationDropdown = () => {
   const dispatch = useDispatch();
@@ -45,7 +50,7 @@ const NotificationDropdown = () => {
   const { notifications, unreadCount, loading } = useSelector(state => state.notification);
 
   const [anchorEl, setAnchorEl] = useState(null);
-  const [selectedTab, setSelectedTab] = useState(0); // 0: Tất cả, 1: Nhập hàng, 2: Xuất hàng
+  const [selectedTab, setSelectedTab] = useState(0); // 0: Tất cả, 1: Nhập hàng, 2: Xuất hàng, 3: Báo cáo
   const open = Boolean(anchorEl);
 
   useEffect(() => {
@@ -75,6 +80,13 @@ const NotificationDropdown = () => {
   const handleNotificationClick = (notification) => {
     if (!notification.isRead) {
       dispatch(markNotificationAsRead(notification._id));
+    }
+
+    // Xử lý notification báo cáo
+    if (notification.metadata?.type === 'report_completed') {
+      dispatch(handleReportCompletion(notification));
+      handleClose();
+      return;
     }
 
     // Navigate based on notification type
@@ -108,7 +120,7 @@ const NotificationDropdown = () => {
       // Chỉ notifications liên quan đến nhập hàng
       filtered = notifications.filter(notification => {
         const metadata = notification.metadata || {};
-        return metadata.type !== 'export' && (
+        return metadata.type !== 'export' && metadata.type !== 'report_completed' && (
           notification.title.toLowerCase().includes('nhập') ||
           notification.title.toLowerCase().includes('cung cấp') ||
           notification.message.toLowerCase().includes('nhập') ||
@@ -125,6 +137,14 @@ const NotificationDropdown = () => {
                notification.title.toLowerCase().includes('xuất') ||
                notification.message.toLowerCase().includes('xuất');
       });
+    } else if (selectedTab === 3) {
+      // Chỉ notifications liên quan đến báo cáo
+      filtered = notifications.filter(notification => {
+        const metadata = notification.metadata || {};
+        return metadata.type === 'report_completed' ||
+               notification.title.toLowerCase().includes('báo cáo') ||
+               notification.message.toLowerCase().includes('báo cáo');
+      });
     }
 
     return filtered;
@@ -133,6 +153,11 @@ const NotificationDropdown = () => {
   const getNotificationIcon = (notification) => {
     const iconProps = { fontSize: 'small' };
     const metadata = notification.metadata || {};
+
+    // Icon cho báo cáo
+    if (metadata.type === 'report_completed') {
+      return <ReportIcon {...iconProps} sx={{ color: 'success.main' }} />;
+    }
 
     // Icon dựa trên loại hoạt động
     if (metadata.type === 'export') {
@@ -180,6 +205,10 @@ const NotificationDropdown = () => {
   const getActivityLabel = (notification) => {
     const metadata = notification.metadata || {};
     
+    if (metadata.type === 'report_completed') {
+      return 'Báo cáo';
+    }
+    
     if (metadata.type === 'export') {
       return 'Xuất hàng';
     }
@@ -216,12 +245,14 @@ const NotificationDropdown = () => {
 
   // Tính số lượng notifications theo loại
   const notificationCounts = React.useMemo(() => {
-    const counts = { all: notifications.length, import: 0, export: 0 };
+    const counts = { all: notifications.length, import: 0, export: 0, report: 0 };
     
     notifications.forEach(notification => {
       const metadata = notification.metadata || {};
       if (metadata.type === 'export') {
         counts.export++;
+      } else if (metadata.type === 'report_completed') {
+        counts.report++;
       } else {
         counts.import++;
       }
@@ -229,6 +260,61 @@ const NotificationDropdown = () => {
     
     return counts;
   }, [notifications]);
+
+  const renderReportNotification = (notification) => {
+    const metadata = notification.metadata || {};
+    const reportTypeName = {
+      overview: 'Tổng quan',
+      import: 'Nhập hàng',
+      export: 'Xuất hàng',
+      inventory: 'Tồn kho'
+    }[metadata.reportType] || metadata.reportType;
+
+    return (
+      <Box>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          component="div"
+          sx={{ mb: 0.5 }}
+        >
+          {notification.message}
+        </Typography>
+        
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
+          <Typography variant="caption" color="text.disabled">
+            {formatDate(notification.createdAt)}
+          </Typography>
+          
+          <Box display="flex" gap={0.5}>
+            <Chip
+              size="small"
+              label={reportTypeName}
+              color="primary"
+              variant="outlined"
+              sx={{ fontSize: '0.7rem', height: 20 }}
+            />
+            <Chip
+              size="small"
+              label={metadata.period}
+              color="secondary"
+              variant="outlined"
+              sx={{ fontSize: '0.7rem', height: 20 }}
+            />
+          </Box>
+        </Box>
+
+        {metadata.downloadUrl && (
+          <Box display="flex" alignItems="center" gap={1} mt={0.5}>
+            <DownloadIcon fontSize="small" color="success" />
+            <Typography variant="caption" color="success.main">
+              File đã sẵn sàng tải về
+            </Typography>
+          </Box>
+        )}
+      </Box>
+    );
+  };
 
   return (
     <>
@@ -251,7 +337,7 @@ const NotificationDropdown = () => {
           horizontal: 'right',
         }}
       >
-        <Paper sx={{ width: 450, maxHeight: 600 }}>
+        <Paper sx={{ width: 480, maxHeight: 650 }}>
           {/* Header */}
           <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
@@ -284,19 +370,25 @@ const NotificationDropdown = () => {
             >
               <Tab 
                 label={`Tất cả (${notificationCounts.all})`} 
-                sx={{ minHeight: 40, textTransform: 'none', fontSize: '0.875rem' }}
+                sx={{ minHeight: 40, textTransform: 'none', fontSize: '0.75rem' }}
               />
               <Tab 
-                label={`Nhập hàng (${notificationCounts.import})`}
+                label={`Nhập (${notificationCounts.import})`}
                 icon={<ImportIcon fontSize="small" />}
                 iconPosition="start"
-                sx={{ minHeight: 40, textTransform: 'none', fontSize: '0.875rem' }}
+                sx={{ minHeight: 40, textTransform: 'none', fontSize: '0.75rem' }}
               />
               <Tab 
-                label={`Xuất hàng (${notificationCounts.export})`}
+                label={`Xuất (${notificationCounts.export})`}
                 icon={<ExportIcon fontSize="small" />}
                 iconPosition="start"
-                sx={{ minHeight: 40, textTransform: 'none', fontSize: '0.875rem' }}
+                sx={{ minHeight: 40, textTransform: 'none', fontSize: '0.75rem' }}
+              />
+              <Tab 
+                label={`Báo cáo (${notificationCounts.report})`}
+                icon={<AnalyticsIcon fontSize="small" />}
+                iconPosition="start"
+                sx={{ minHeight: 40, textTransform: 'none', fontSize: '0.75rem' }}
               />
             </Tabs>
           </Box>
@@ -314,7 +406,8 @@ const NotificationDropdown = () => {
                   secondary={
                     selectedTab === 0 ? "Bạn chưa có thông báo nào" :
                     selectedTab === 1 ? "Không có thông báo nhập hàng" :
-                    "Không có thông báo xuất hàng"
+                    selectedTab === 2 ? "Không có thông báo xuất hàng" :
+                    "Không có thông báo báo cáo"
                   }
                 />
               </ListItem>
@@ -367,56 +460,59 @@ const NotificationDropdown = () => {
                           </Box>
                         }
                         secondary={
-                          <Box>
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              component="div"
-                              sx={{ mb: 0.5 }}
-                            >
-                              {notification.message}
-                            </Typography>
-                            
-                            <Box display="flex" justifyContent="space-between" alignItems="center">
-                              <Typography
-                                variant="caption"
-                                color="text.disabled"
-                                component="span"
-                              >
-                                {formatDate(notification.createdAt)}
-                              </Typography>
-                              
-                              {notification.relatedOrderId && (
-                                <Chip
-                                  size="small"
-                                  label={notification.relatedOrderId}
-                                  variant="outlined"
-                                  color="primary"
-                                  sx={{ fontSize: '0.7rem', height: 20 }}
-                                />
-                              )}
-                            </Box>
-
-                            {/* Hiển thị thông tin bổ sung cho export orders */}
-                            {notification.metadata?.type === 'export' && notification.metadata?.totalAmount && (
-                              <Box display="flex" alignItems="center" gap={1} mt={0.5}>
-                                <CustomerIcon fontSize="small" color="action" />
-                                <Typography variant="caption" color="text.secondary">
-                                  {notification.metadata.customerName || 'Khách lẻ'} - {notification.metadata.totalAmount.toLocaleString('vi-VN')}đ
+                          notification.metadata?.type === 'report_completed' ? 
+                            renderReportNotification(notification) : (
+                              <Box>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  component="div"
+                                  sx={{ mb: 0.5 }}
+                                >
+                                  {notification.message}
                                 </Typography>
-                              </Box>
-                            )}
+                                
+                                <Box display="flex" justifyContent="space-between" alignItems="center">
+                                  <Typography
+                                    variant="caption"
+                                    color="text.disabled"
+                                    component="span"
+                                  >
+                                    {formatDate(notification.createdAt)}
+                                  </Typography>
+                                  
+                                  {notification.relatedOrderId && (
+                                    <Chip
+                                      size="small"
+                                      label={notification.relatedOrderId}
+                                      variant="outlined"
+                                      color="primary"
+                                      sx={{ fontSize: '0.7rem', height: 20 }}
+                                    />
+                                  )}
+                                </Box>
 
-                            {/* Hiển thị thông tin bổ sung cho import orders */}
-                            {notification.metadata?.supplier && notification.metadata?.type !== 'export' && (
-                              <Box display="flex" alignItems="center" gap={1} mt={0.5}>
-                                <SupplierIcon fontSize="small" color="action" />
-                                <Typography variant="caption" color="text.secondary">
-                                  {notification.metadata.supplier}
-                                </Typography>
+                                {/* Hiển thị thông tin bổ sung cho export orders */}
+                                {notification.metadata?.type === 'export' && notification.metadata?.totalAmount && (
+                                  <Box display="flex" alignItems="center" gap={1} mt={0.5}>
+                                    <CustomerIcon fontSize="small" color="action" />
+                                    <Typography variant="caption" color="text.secondary">
+                                      {notification.metadata.customerName || 'Khách lẻ'} - {notification.metadata.totalAmount.toLocaleString('vi-VN')}đ
+                                    </Typography>
+                                  </Box>
+                                )}
+
+                                {/* Hiển thị thông tin bổ sung cho import orders */}
+                                {notification.metadata?.supplier && notification.metadata?.type !== 'export' && (
+                                  <Box display="flex" alignItems="center" gap={1} mt={0.5}>
+                                    <SupplierIcon fontSize="small" color="action" />
+                                    <Typography variant="caption" color="text.secondary">
+                                      {notification.metadata.supplier}
+                                    </Typography>
+                                  </Box>
+                                )}
                               </Box>
-                            )}
-                          </Box>
+                            )
                         }
                       />
                     </ListItemButton>

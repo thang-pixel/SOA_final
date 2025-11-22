@@ -112,12 +112,12 @@ function ImportOrder() {
     'Tổng công ty YZ'
   ], []);
 
-  useEffect(() => {
-    if (!currentImportOrder.items.length) {
-      showWarning('Chưa có sản phẩm nào được chọn để nhập hàng');
-      setTimeout(() => navigate('/inventory'), 2000);
-    }
-  }, [currentImportOrder, navigate, showWarning]);
+  // useEffect(() => {
+  //   if (!currentImportOrder.items.length) {
+  //     showWarning('Chưa có sản phẩm nào được chọn để nhập hàng');
+  //     setTimeout(() => navigate('/inventory'), 2000);
+  //   }
+  // }, [currentImportOrder, navigate, showWarning]);
 
   const handleBack = useCallback(async () => {
     if (currentImportOrder.items.length > 0) {
@@ -157,10 +157,8 @@ function ImportOrder() {
     
     dispatch(updateImportItem({ index, item: updatedItem }));
     
-    if (quantity > 0) {
-      showInfo(`Đã cập nhật số lượng ${item.productName}: ${quantity}`, '', 2000);
-    }
-  }, [currentImportOrder.items, dispatch, showWarning, showInfo]);
+
+  }, [currentImportOrder.items, dispatch, showWarning]);
 
   const handlePriceChange = useCallback((index, price) => {
     if (price < 0) {
@@ -179,10 +177,8 @@ function ImportOrder() {
     
     dispatch(updateImportItem({ index, item: updatedItem }));
     
-    if (price > 0) {
-      showInfo(`Đã cập nhật giá ${item.productName}: ${price.toLocaleString('vi-VN')}đ`, '', 2000);
-    }
-  }, [currentImportOrder.items, dispatch, showWarning, showInfo]);
+
+  }, [currentImportOrder.items, dispatch, showWarning]);
 
   const handleDiscountChange = useCallback((index, discount) => {
     const discountPercent = Math.min(100, Math.max(0, discount));
@@ -197,10 +193,8 @@ function ImportOrder() {
     
     dispatch(updateImportItem({ index, item: updatedItem }));
     
-    if (discountPercent > 0) {
-      showInfo(`Đã áp dụng giảm giá ${discountPercent}% cho ${item.productName}`, '', 2000);
-    }
-  }, [currentImportOrder.items, dispatch, showInfo]);
+
+  }, [currentImportOrder.items, dispatch, showWarning]);
 
   const handleRemoveItem = useCallback(async (index) => {
     const item = currentImportOrder.items[index];
@@ -221,10 +215,8 @@ function ImportOrder() {
 
   const handleSupplierChange = useCallback((event, value) => {
     dispatch(setImportSupplier(value || ''));
-    if (value) {
-      showInfo(`Đã chọn nhà cung cấp: ${value}`, '', 2000);
-    }
-  }, [dispatch, showInfo]);
+
+  }, [dispatch]);
 
   const handleNotesChange = useCallback((e) => {
     dispatch(setImportNotes(e.target.value));
@@ -274,7 +266,7 @@ function ImportOrder() {
       );
       
       dispatch(clearCurrentImportOrder());
-      setTimeout(() => navigate('/user/order-manager'), 2000);
+      navigate('/order');
     } catch (error) {
       showError(
         `Lỗi khi lưu đơn nhập hàng: ${error.message}`,
@@ -310,7 +302,7 @@ function ImportOrder() {
       );
       
       dispatch(clearCurrentImportOrder());
-      setTimeout(() => navigate('/user/order-manager'), 3000);
+      navigate('/order');
     } catch (error) {
       showError(
         `Lỗi khi gửi đơn nhập hàng: ${error.message}`,
@@ -332,38 +324,38 @@ function ImportOrder() {
     return { totalQuantity, totalAmount, totalDiscount };
   }, [currentImportOrder.items]);
 
-  // Kiểm tra nếu không có sản phẩm
-  if (currentImportOrder.items.length === 0) {
-    return (
-      <Box sx={{ p: 3, backgroundColor: '#f8fafc', minHeight: '100vh' }}>
-        <Alert severity="warning" sx={{ mb: 2, maxWidth: 600 }}>
-          <Typography variant="h6" gutterBottom>
-            Chưa có sản phẩm nào được chọn
-          </Typography>
-          <Typography>
-            Vui lòng quay lại trang kho hàng và chọn các sản phẩm cần nhập hàng.
-          </Typography>
-        </Alert>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/user/inventory')}
-          sx={{ textTransform: 'none' }}
-        >
-          Quay lại kho hàng
-        </Button>
+  // // Kiểm tra nếu không có sản phẩm
+  // if (currentImportOrder.items.length === 0) {
+  //   return (
+  //     <Box sx={{ p: 3, backgroundColor: '#f8fafc', minHeight: '100vh' }}>
+  //       <Alert severity="warning" sx={{ mb: 2, maxWidth: 600 }}>
+  //         <Typography variant="h6" gutterBottom>
+  //           Chưa có sản phẩm nào được chọn
+  //         </Typography>
+  //         <Typography>
+  //           Vui lòng quay lại trang kho hàng và chọn các sản phẩm cần nhập hàng.
+  //         </Typography>
+  //       </Alert>
+  //       <Button
+  //         variant="outlined"
+  //         startIcon={<ArrowBackIcon />}
+  //         onClick={() => navigate('/inventory')}
+  //         sx={{ textTransform: 'none' }}
+  //       >
+  //         Quay lại kho hàng
+  //       </Button>
 
-        <NotificationSnackbar
-          open={notification.open}
-          message={notification.message}
-          severity={notification.severity}
-          autoHideDuration={notification.autoHideDuration}
-          onClose={hideNotification}
-          title={notification.title}
-        />
-      </Box>
-    );
-  }
+  //       <NotificationSnackbar
+  //         open={notification.open}
+  //         message={notification.message}
+  //         severity={notification.severity}
+  //         autoHideDuration={notification.autoHideDuration}
+  //         onClose={hideNotification}
+  //         title={notification.title}
+  //       />
+  //     </Box>
+  //   );
+  // }
 
   return (
     <Box sx={{ p: 3, backgroundColor: '#f8fafc', minHeight: '100vh' }}>
