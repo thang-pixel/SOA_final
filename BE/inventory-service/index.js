@@ -42,6 +42,21 @@ const inventorySchema = new mongoose.Schema({
 
 const inventory = mongoose.model('Inventory', inventorySchema);
 
+// Helper function để log hoạt động
+async function logActivity(username, action, description, metadata = {}) {
+  try {
+    await axios.post('http://localhost:3005/activity/log', {
+      username,
+      action,
+      description,
+      metadata,
+      timestamp: new Date()
+    });
+  } catch (error) {
+    console.error('Error logging activity:', error.message);
+  }
+}
+
 // API lấy danh sách hàng tồn kho
 app.get('/product/getAll', async (req, res) => {
     try {
@@ -58,6 +73,16 @@ app.post('/product/add', async (req, res) => {
     try {
         const newItem = new inventory(req.body);
         await newItem.save();
+        
+        // Log hoạt động thêm sản phẩm
+        const username = req.body.createdBy || 'admin';
+        await logActivity(username, 'create_product', `Đã thêm sản phẩm ${newItem.name} (${newItem.code})`, {
+          productId: newItem._id,
+          productCode: newItem.code,
+          productName: newItem.name,
+          stock: newItem.stock
+        });
+        
         res.status(201).json(newItem);
     } catch (error) {
         console.error('Error adding inventory item:', error);
@@ -95,6 +120,14 @@ app.put('/product/update/:id', async (req, res) => {
         if (!updatedItem) {
             return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
         }
+        
+        // Log hoạt động cập nhật sản phẩm
+        const username = req.body.updatedBy || 'admin';
+        await logActivity(username, 'update_product', `Đã cập nhật sản phẩm ${updatedItem.name} (${updatedItem.code})`, {
+          productId: updatedItem._id,
+          productCode: updatedItem.code,
+          productName: updatedItem.name
+        });
         
         res.json(updatedItem);
     } catch (error) {

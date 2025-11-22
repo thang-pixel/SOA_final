@@ -28,6 +28,20 @@ const authSchema = new mongoose.Schema({
 
 const auth = mongoose.model('Auth', authSchema);
 
+// Helper function để log hoạt động
+async function logActivity(username, action, description, metadata = {}) {
+  try {
+    await axios.post('http://localhost:3005/activity/log', {
+      username,
+      action,
+      description,
+      metadata,
+      timestamp: new Date()
+    });
+  } catch (error) {
+    console.error('Error logging activity:', error.message);
+  }
+}
 
 // API đăng nhập
 app.post('/login', async (req, res) => {
@@ -49,6 +63,13 @@ app.post('/login', async (req, res) => {
     console.log("Decoded token:", jwt.decode(token));
     const userObj = user.toObject();
     delete userObj.password;
+    
+    // Log hoạt động đăng nhập (không await để không chặn response)
+    logActivity(user.username, 'login', `${user.username} đã đăng nhập vào hệ thống`, {
+      role: user.role,
+      email: user.email
+    });
+    
     res.json({
       message: 'Login successful',
       token,
@@ -71,6 +92,11 @@ app.post('/register', async (req, res) => {
 
     const newUser = new auth({ username, password, email });
     await newUser.save();
+
+    // Log hoạt động đăng ký (không await để không chặn response)
+    logActivity(username, 'register', `${username} đã đăng ký tài khoản mới`, {
+      email: email
+    });
 
     res.status(201).json({ message: 'Đăng ký thành công' });
   } catch (error) {
@@ -101,6 +127,14 @@ app.put('/users/:id', async (req, res) => {
     ).select('-password -__v');
 
     if (!updatedUser) return res.status(404).json({ message: 'Không tìm thấy user' });
+    
+    // Log hoạt động cập nhật user (không await để không chặn response)
+    const adminUsername = req.body.adminUsername || 'admin';
+    logActivity(adminUsername, 'update_user', `Đã cập nhật thông tin tài khoản ${updatedUser.username}`, {
+      userId: updatedUser._id,
+      updates: { email, role }
+    });
+    
     res.json(updatedUser);
   } catch (error) {
     res.status(500).json({ message: 'Lỗi cập nhật' });
@@ -112,6 +146,14 @@ app.delete('/users/:id', async (req, res) => {
   try {
     const deletedUser = await auth.findByIdAndDelete(req.params.id);
     if (!deletedUser) return res.status(404).json({ message: 'Không tìm thấy user' });
+    
+    // Log hoạt động xóa user (không await để không chặn response)
+    const adminUsername = req.body.adminUsername || 'admin';
+    logActivity(adminUsername, 'delete_user', `Đã xóa tài khoản ${deletedUser.username}`, {
+      userId: deletedUser._id,
+      deletedUsername: deletedUser.username
+    });
+    
     res.json({ message: 'Xóa thành công' });
   } catch (error) {
     res.status(500).json({ message: 'Lỗi xóa user' });
