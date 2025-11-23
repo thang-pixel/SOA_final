@@ -3,17 +3,20 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 
 // Components
-import ProductHistoryPopup from '../../../components/ProductHistoryPopup';
 import AddProductPopup from '../../../components/AddProductPopup';
 import NotificationSnackbar from '../../../components/NotificationSnackbar';
 import ConfirmDialog from '../../../components/ConfirmDialog';
+import ProductHistoryDialog from '../../../components/ProductHistoryDialog';
 
 // Redux actions
 import { setSearchFilter, setStockFilter } from '../../../redux/reducers/inventorySlice';
 import { createImportOrder, createExportOrder } from '../../../redux/action/orderAction';
-import AddProductPopup from '../../../components/AddProductPopup';
-import ProductHistoryDialog from '../../../components/ProductHistoryDialog';
-import { useNavigate } from 'react-router-dom';
+import { fetchInventoryItems, deleteMultipleProducts } from '../../../redux/action/inventory';
+
+// Hooks
+import { useNotification } from '../../../hooks/useNotification';
+import { useConfirm } from '../../../hooks/useConfirm';
+
 import {
   Box,
   Paper,
@@ -268,7 +271,6 @@ function Inventory() {
   const [selectionModel, setSelectionModel] = useState([]);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const navigate = useNavigate();
   
   // Hooks
   const {
@@ -358,21 +360,16 @@ function Inventory() {
     setSelectionModel(newSelection);
   }, []);
 
-  // Stock history popup handlers
-  const handleStockClick = useCallback((productInfo) => {
-    setHistoryPopup({
-      open: true,
-      productId: productInfo._id,
-      productInfo: productInfo
-    });
+  // Stock history dialog handlers
+  const handleStockClick = useCallback((product, event) => {
+    event.stopPropagation();
+    setSelectedProduct(product);
+    setHistoryDialogOpen(true);
   }, []);
 
-  const handleCloseHistoryPopup = useCallback(() => {
-    setHistoryPopup({ 
-      open: false, 
-      productId: null, 
-      productInfo: null 
-    });
+  const handleCloseHistoryDialog = useCallback(() => {
+    setHistoryDialogOpen(false);
+    setSelectedProduct(null);
   }, []);
 
   // Selection action handlers
@@ -484,27 +481,6 @@ function Inventory() {
     showInfo('Tính năng xuất file đang được phát triển');
     // TODO: Implement export functionality
   }, [showInfo]);
-
-  const handleStockClick = useCallback((product, event) => {
-    event.stopPropagation();
-    setSelectedProduct(product);
-    setHistoryDialogOpen(true);
-  }, []);
-
-  const handleCloseHistoryDialog = useCallback(() => {
-    setHistoryDialogOpen(false);
-    setSelectedProduct(null);
-  }, []);
-
-  // Memoized statistics
-  const statistics = useMemo(() => {
-    const totalStock = items.reduce((sum, item) => sum + item.stock, 0);
-    const totalValue = items.reduce((sum, item) => sum + (item.price * item.stock), 0);
-    const lowStockItems = items.filter(item => item.stock <= 10).length;
-    const outOfStockItems = items.filter(item => item.stock === 0).length;
-
-    return { totalStock, totalValue, lowStockItems, outOfStockItems };
-  }, [items]);
 
   // Memoized columns configuration
   const columns = useMemo(() => [
@@ -789,12 +765,11 @@ function Inventory() {
         editItem={editingItem}
       />
 
-      {/* Product History Popup */}
-      <ProductHistoryPopup
-        open={historyPopup.open}
-        onClose={handleCloseHistoryPopup}
-        productId={historyPopup.productId}
-        productInfo={historyPopup.productInfo}
+      {/* Product History Dialog */}
+      <ProductHistoryDialog
+        open={historyDialogOpen}
+        onClose={handleCloseHistoryDialog}
+        product={selectedProduct}
       />
 
       {/* Notification Snackbar */}
@@ -818,13 +793,6 @@ function Inventory() {
         confirmText={confirmState.confirmText}
         cancelText={confirmState.cancelText}
         loading={confirmState.loading}
-      />
-
-      {/* Product History Dialog */}
-      <ProductHistoryDialog
-        open={historyDialogOpen}
-        onClose={handleCloseHistoryDialog}
-        product={selectedProduct}
       />
     </Box>
   );

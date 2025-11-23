@@ -23,7 +23,7 @@ const activityLogSchema = new mongoose.Schema({
   action: { 
     type: String, 
     required: true,
-    enum: ['login', 'logout', 'create_product', 'update_product', 'delete_product', 
+    enum: ['delete_multiple_products','login', 'logout', 'create_product', 'update_product', 'delete_product', 
            'create_import_order', 'submit_import_order', 'create_warehouse_receipt',
            'create_export_order', 'approve_export_order', 'reject_export_order',
            'update_user', 'delete_user', 'register']
@@ -99,6 +99,41 @@ app.get('/activity/logs', async (req, res) => {
   } catch (error) {
     console.error('Error fetching activity logs:', error);
     res.status(500).json({ message: 'Lỗi lấy danh sách log hoạt động' });
+  }
+});
+
+// API lấy lịch sử nhập/xuất của một sản phẩm cụ thể
+app.get('/activity/logs/product/:productId', async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { limit = 50 } = req.query;
+    
+    // Lấy các hoạt động liên quan đến sản phẩm này
+    const logs = await ActivityLog.find({
+      'metadata.productId': productId,
+      action: { 
+        $in: ['create_import_order', 'submit_import_order', 'create_warehouse_receipt', 
+              'create_export_order', 'approve_export_order', 'update_product'] 
+      }
+    })
+      .sort({ timestamp: -1 })
+      .limit(parseInt(limit));
+    
+    // Thống kê tổng hợp
+    const stats = {
+      totalImports: logs.filter(log => log.action === 'create_warehouse_receipt').length,
+      totalExports: logs.filter(log => log.action === 'approve_export_order').length,
+      totalUpdates: logs.filter(log => log.action === 'update_product').length
+    };
+    
+    res.json({
+      logs,
+      stats,
+      productId
+    });
+  } catch (error) {
+    console.error('Error fetching product activity logs:', error);
+    res.status(500).json({ message: 'Lỗi lấy lịch sử sản phẩm', error: error.message });
   }
 });
 
