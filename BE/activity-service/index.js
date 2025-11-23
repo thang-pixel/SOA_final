@@ -166,6 +166,41 @@ app.get('/activity/stats/by-user', async (req, res) => {
   }
 });
 
+// API lấy lịch sử nhập/xuất của một sản phẩm cụ thể
+app.get('/activity/logs/product/:productId', async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { limit = 50 } = req.query;
+    
+    // Lấy các hoạt động liên quan đến sản phẩm này
+    const logs = await ActivityLog.find({
+      'metadata.productId': productId,
+      action: { 
+        $in: ['create_import_order', 'submit_import_order', 'create_warehouse_receipt', 
+              'create_export_order', 'approve_export_order', 'update_product'] 
+      }
+    })
+      .sort({ timestamp: -1 })
+      .limit(parseInt(limit));
+    
+    // Thống kê tổng hợp
+    const stats = {
+      totalImports: logs.filter(log => log.action === 'create_warehouse_receipt').length,
+      totalExports: logs.filter(log => log.action === 'approve_export_order').length,
+      totalUpdates: logs.filter(log => log.action === 'update_product').length
+    };
+    
+    res.json({
+      logs,
+      stats,
+      productId
+    });
+  } catch (error) {
+    console.error('Error fetching product activity logs:', error);
+    res.status(500).json({ message: 'Lỗi lấy lịch sử sản phẩm', error: error.message });
+  }
+});
+
 // API lấy thống kê tổng hợp cho dashboard
 app.get('/activity/stats/summary', async (req, res) => {
   try {
@@ -213,6 +248,8 @@ app.get('/activity/stats/summary', async (req, res) => {
     res.status(500).json({ message: 'Lỗi lấy thống kê tổng hợp' });
   }
 });
+
+
 
 const PORT = process.env.PORT || 3005;
 app.listen(PORT, () => {

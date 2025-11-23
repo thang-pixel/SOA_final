@@ -11,13 +11,9 @@ import ConfirmDialog from '../../../components/ConfirmDialog';
 // Redux actions
 import { setSearchFilter, setStockFilter } from '../../../redux/reducers/inventorySlice';
 import { createImportOrder, createExportOrder } from '../../../redux/action/orderAction';
-import { fetchInventoryItems, deleteMultipleProducts } from '../../../redux/action/inventory';
-
-// Hooks
-import { useNotification } from '../../../hooks/useNotification';
-import { useConfirm } from '../../../hooks/useConfirm';
-
-// UI Components
+import AddProductPopup from '../../../components/AddProductPopup';
+import ProductHistoryDialog from '../../../components/ProductHistoryDialog';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -270,11 +266,9 @@ function Inventory() {
   const [openPopup, setOpenPopup] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [selectionModel, setSelectionModel] = useState([]);
-  const [historyPopup, setHistoryPopup] = useState({ 
-    open: false, 
-    productId: null, 
-    productInfo: null 
-  });
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const navigate = useNavigate();
   
   // Hooks
   const {
@@ -491,6 +485,27 @@ function Inventory() {
     // TODO: Implement export functionality
   }, [showInfo]);
 
+  const handleStockClick = useCallback((product, event) => {
+    event.stopPropagation();
+    setSelectedProduct(product);
+    setHistoryDialogOpen(true);
+  }, []);
+
+  const handleCloseHistoryDialog = useCallback(() => {
+    setHistoryDialogOpen(false);
+    setSelectedProduct(null);
+  }, []);
+
+  // Memoized statistics
+  const statistics = useMemo(() => {
+    const totalStock = items.reduce((sum, item) => sum + item.stock, 0);
+    const totalValue = items.reduce((sum, item) => sum + (item.price * item.stock), 0);
+    const lowStockItems = items.filter(item => item.stock <= 10).length;
+    const outOfStockItems = items.filter(item => item.stock === 0).length;
+
+    return { totalStock, totalValue, lowStockItems, outOfStockItems };
+  }, [items]);
+
   // Memoized columns configuration
   const columns = useMemo(() => [
     {
@@ -561,12 +576,17 @@ function Inventory() {
       headerAlign: 'center',
       align: 'center',
       renderCell: (params) => (
-        <Box data-testid="stock-chip">
-          <StockChip 
-            stock={params.value} 
-            onClick={handleStockClick}
-            productInfo={params.row}
-          />
+        <Box 
+          onClick={(e) => handleStockClick(params.row, e)}
+          sx={{ 
+            cursor: 'pointer',
+            '&:hover': {
+              transform: 'scale(1.1)',
+              transition: 'transform 0.2s'
+            }
+          }}
+        >
+          <StockChip stock={params.value} />
         </Box>
       ),
     },
@@ -798,6 +818,13 @@ function Inventory() {
         confirmText={confirmState.confirmText}
         cancelText={confirmState.cancelText}
         loading={confirmState.loading}
+      />
+
+      {/* Product History Dialog */}
+      <ProductHistoryDialog
+        open={historyDialogOpen}
+        onClose={handleCloseHistoryDialog}
+        product={selectedProduct}
       />
     </Box>
   );

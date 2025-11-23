@@ -111,6 +111,17 @@ app.post('/export/create', async (req, res) => {
     
     await newExportOrder.save();
     
+    // Log hoạt động xuất hàng cho từng sản phẩm
+    for (const item of items) {
+      await logActivity(createdBy, 'approve_export_order', `Xuất kho ${item.productName} - SL: ${item.quantity}`, {
+        receiptCode,
+        customerName,
+        productId: item.productId,
+        productCode: item.productCode,
+        quantity: item.quantity
+      });
+    }
+    
     // Gửi thông báo qua RabbitMQ
     await sendNotificationMessage({
       title: 'Tạo phiếu xuất hàng thành công',
@@ -349,13 +360,16 @@ app.post('/import/create', async (req, res) => {
     
     await newOrder.save();
     
-    // Log hoạt động tạo đơn nhập hàng
-    await logActivity(createdBy, 'create_import_order', `Đã tạo đơn nhập hàng ${orderCode} từ nhà cung cấp ${supplier}`, {
-      orderCode,
-      supplier,
-      totalAmount,
-      itemCount: items.length
-    });
+    // Log hoạt động tạo đơn nhập hàng cho từng sản phẩm
+    for (const item of items) {
+      await logActivity(createdBy, 'create_import_order', `Tạo đơn nhập ${item.productName} - SL: ${item.quantity}`, {
+        orderCode,
+        supplier,
+        productId: item.productId,
+        productCode: item.productCode,
+        quantity: item.quantity
+      });
+    }
     
     res.status(201).json(newOrder);
   } catch (error) {
@@ -383,11 +397,16 @@ app.put('/import/submit/:id', async (req, res) => {
     order.processedAt = new Date();
     await order.save();
     
-    // Log hoạt động gửi đơn hàng
-    await logActivity(order.createdBy, 'submit_import_order', `Đã gửi đơn nhập hàng ${order.orderCode} cho nhà cung cấp xử lý`, {
-      orderCode: order.orderCode,
-      supplier: order.supplier
-    });
+    // Log hoạt động gửi đơn hàng cho từng sản phẩm
+    for (const item of order.items) {
+      await logActivity(order.createdBy, 'submit_import_order', `Gửi đơn nhập ${item.productName} - SL: ${item.quantity}`, {
+        orderCode: order.orderCode,
+        supplier: order.supplier,
+        productId: item.productId,
+        productCode: item.productCode,
+        quantity: item.quantity
+      });
+    }
     
     // Gửi email đến nhà cung cấp qua RabbitMQ
     await sendEmailMessage({
@@ -472,12 +491,16 @@ app.put('/import/create-receipt/:id', async (req, res) => {
     order.warehouseReceiptCode = warehouseReceiptCode;
     await order.save();
     
-    // Log hoạt động tạo phiếu nhập kho
-    await logActivity(warehouseStaff, 'create_warehouse_receipt', `Đã tạo phiếu nhập kho ${warehouseReceiptCode} cho đơn hàng ${order.orderCode}`, {
-      orderCode: order.orderCode,
-      warehouseReceiptCode,
-      totalItems: actualQuantities.length
-    });
+    // Log hoạt động tạo phiếu nhập kho cho từng sản phẩm
+    for (const item of order.items) {
+      await logActivity(warehouseStaff, 'create_warehouse_receipt', `Nhập kho ${item.productName} - SL: ${item.actualQuantity || item.quantity}`, {
+        orderCode: order.orderCode,
+        warehouseReceiptCode,
+        productId: item.productId,
+        productCode: item.productCode,
+        quantity: item.actualQuantity || item.quantity
+      });
+    }
     
     // Gửi thông báo hoàn thành qua RabbitMQ
     await sendNotificationMessage({
