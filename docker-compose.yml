@@ -4,7 +4,6 @@ services:
   # RabbitMQ Message Broker
   rabbitmq:
     image: rabbitmq:3.12-management
-    container_name: soa-rabbitmq
     ports:
       - "5672:5672"      # AMQP port
       - "15672:15672"    # Management UI
@@ -23,10 +22,7 @@ services:
 
   # Auth Service
   auth-service:
-    build:
-      context: ./BE/auth-service
-      dockerfile: Dockerfile
-    container_name: soa-auth-service
+    image: auth-service:latest
     ports:
       - "3001:3001"
     environment:
@@ -37,14 +33,11 @@ services:
       - soa-network
     depends_on:
       - rabbitmq
-    restart: unless-stopped
 
   # Inventory Service
   inventory-service:
-    build:
-      context: ./BE/inventory-service
-      dockerfile: Dockerfile
-    container_name: soa-inventory-service
+    image: inventory-service:latest
+
     ports:
       - "3002:3002"
     environment:
@@ -52,14 +45,12 @@ services:
       - MONGO_URI=${INVENTORY_MONGO_URI:-mongodb+srv://thang:123@cluster-soa-final.m1tinrp.mongodb.net/inventory-db}
     networks:
       - soa-network
-    restart: unless-stopped
+
 
   # Order Service
   order-service:
-    build:
-      context: ./BE/order-service
-      dockerfile: Dockerfile
-    container_name: soa-order-service
+    image: order-service:latest
+
     ports:
       - "3003:3003"
     environment:
@@ -69,16 +60,17 @@ services:
     networks:
       - soa-network
     depends_on:
-      rabbitmq:
-        condition: service_healthy
-    restart: unless-stopped
+      - rabbitmq
+
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
 
   # Notification Service
   notification-service:
-    build:
-      context: ./BE/notification-service
-      dockerfile: Dockerfile
-    container_name: soa-notification-service
+    image: notification-service:latest
+
     ports:
       - "3004:3004"
     environment:
@@ -90,16 +82,13 @@ services:
     networks:
       - soa-network
     depends_on:
-      rabbitmq:
-        condition: service_healthy
-    restart: unless-stopped
+      - rabbitmq
+
 
   # Activity Service
   activity-service:
-    build:
-      context: ./BE/activity-service
-      dockerfile: Dockerfile
-    container_name: soa-activity-service
+    image: activity-service:latest
+
     ports:
       - "3005:3005"
     environment:
@@ -107,13 +96,11 @@ services:
       - MONGO_URI=${ACTIVITY_MONGO_URI:-mongodb+srv://thang:123@cluster-soa-final.m1tinrp.mongodb.net/activity-db}
     networks:
       - soa-network
-    restart: unless-stopped
+
   # Report Service
   report-service:
-    build:
-      context: ./BE/report-service
-      dockerfile: Dockerfile
-    container_name: soa-report-service
+    image: report-service:latest
+
     ports:
       - "3006:3006"
     environment:
@@ -122,15 +109,12 @@ services:
     networks:
       - soa-network
     depends_on:
-      rabbitmq:
-        condition: service_healthy
-    restart: unless-stopped
+      - rabbitmq
+
   # API Gateway
   api-gateway:
-    build:
-      context: ./BE/api-gateway
-      dockerfile: Dockerfile
-    container_name: soa-api-gateway
+    image: api-gateway:latest
+
     ports:
       - "2000:2000"
     environment:
@@ -143,14 +127,12 @@ services:
       - order-service
       - notification-service
       - activity-service
-    restart: unless-stopped
+
 
   # Frontend
   frontend:
-    build:
-      context: ./FE/vite-SOA_final
-      dockerfile: Dockerfile
-    container_name: soa-frontend
+    image: frontend:latest
+
     ports:
       - "5173:5173"
     environment:
@@ -159,11 +141,12 @@ services:
       - soa-network
     depends_on:
       - api-gateway
-    restart: unless-stopped
 
 networks:
   soa-network:
-    driver: bridge
+    driver: overlay
+    attachable: true
 
 volumes:
   rabbitmq_data:
+    driver: local
