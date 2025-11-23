@@ -80,3 +80,18 @@ export const createActivityLog = (activityData) => async (dispatch) => {
     throw error;
   }
 };
+
+// Lấy lịch sử nhập/xuất của một sản phẩm cụ thể
+export const getProductActivityHistory = (productId) => async (dispatch) => {
+  try {
+    dispatch(setLoading(true));
+    const response = await axios.get(`${ACTIVITY_DOMAIN}/activity/logs/product/${productId}`);
+    dispatch(setLoading(false));
+    return response.data;
+  } catch (error) {
+    dispatch(setError(error.response?.data?.message || 'Lỗi khi lấy lịch sử sản phẩm'));
+    dispatch(setLoading(false));
+    throw error;
+  }
+};
+

@@ -4,6 +4,7 @@ import { fetchInventoryItems } from '../../../redux/action/inventory';
 import { setSearchFilter, setStockFilter } from '../../../redux/reducers/inventorySlice';
 import { createImportOrder, createExportOrder } from '../../../redux/action/orderAction';
 import AddProductPopup from '../../../components/AddProductPopup';
+import ProductHistoryDialog from '../../../components/ProductHistoryDialog';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -235,6 +236,8 @@ function Inventory() {
   const [openPopup, setOpenPopup] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [selectionModel, setSelectionModel] = useState([]);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const navigate = useNavigate();
   
   // Sử dụng notification hook
@@ -365,6 +368,17 @@ function Inventory() {
     // TODO: Implement export functionality
   }, [showInfo]);
 
+  const handleStockClick = useCallback((product, event) => {
+    event.stopPropagation();
+    setSelectedProduct(product);
+    setHistoryDialogOpen(true);
+  }, []);
+
+  const handleCloseHistoryDialog = useCallback(() => {
+    setHistoryDialogOpen(false);
+    setSelectedProduct(null);
+  }, []);
+
   // Memoized statistics
   const statistics = useMemo(() => {
     const totalStock = items.reduce((sum, item) => sum + item.stock, 0);
@@ -444,7 +458,20 @@ function Inventory() {
       type: 'number',
       headerAlign: 'center',
       align: 'center',
-      renderCell: (params) => <StockChip stock={params.value} />,
+      renderCell: (params) => (
+        <Box 
+          onClick={(e) => handleStockClick(params.row, e)}
+          sx={{ 
+            cursor: 'pointer',
+            '&:hover': {
+              transform: 'scale(1.1)',
+              transition: 'transform 0.2s'
+            }
+          }}
+        >
+          <StockChip stock={params.value} />
+        </Box>
+      ),
     },
     {
       field: 'createdAt',
@@ -630,6 +657,13 @@ function Inventory() {
         severity={notification.severity}
         autoHideDuration={notification.autoHideDuration}
         onClose={hideNotification}
+      />
+
+      {/* Product History Dialog */}
+      <ProductHistoryDialog
+        open={historyDialogOpen}
+        onClose={handleCloseHistoryDialog}
+        product={selectedProduct}
       />
     </Box>
   );
