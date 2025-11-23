@@ -32,7 +32,8 @@ import {
   AttachMoney as MoneyIcon,
   Inventory as InventoryIcon,
   Category as CategoryIcon,
-  Business as BusinessIcon
+  Business as BusinessIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 
 // Memoized ImageItem component
@@ -111,6 +112,7 @@ const AddProductPopup = React.memo(({ isOpen, onClose, onSuccess, editItem }) =>
     price: 0,
     cost: 0,
     stock: 0,
+    minStockThreshold: 10, // Ngưỡng tồn kho tối thiểu
     image: '',
   });
   
@@ -147,6 +149,7 @@ const AddProductPopup = React.memo(({ isOpen, onClose, onSuccess, editItem }) =>
           price: editItem.price || 0,
           cost: editItem.cost || 0,
           stock: editItem.stock || 0,
+          minStockThreshold: editItem.minStockThreshold || 10,
           image: editItem.image || '',
         });
         setSelectedImage(editItem.image || '');
@@ -160,6 +163,7 @@ const AddProductPopup = React.memo(({ isOpen, onClose, onSuccess, editItem }) =>
           price: 0,
           cost: 0,
           stock: 0,
+          minStockThreshold: 10,
           image: '',
         });
         setSelectedImage('');
@@ -257,6 +261,7 @@ const AddProductPopup = React.memo(({ isOpen, onClose, onSuccess, editItem }) =>
       price: 0,
       cost: 0,
       stock: 0,
+      minStockThreshold: 10,
       image: '',
     });
     setSelectedImage('');
@@ -470,17 +475,50 @@ const AddProductPopup = React.memo(({ isOpen, onClose, onSuccess, editItem }) =>
               </Typography>
               <Divider sx={{ mb: 2 }} />
               
-              <TextField
-                fullWidth
-                label="Số lượng tồn kho"
-                name="stock"
-                type="number"
-                value={formData.stock}
-                onChange={handleInputChange}
-                inputProps={{ min: 0 }}
-                size="small"
-                helperText="Nhập số lượng sản phẩm hiện có trong kho"
-              />
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="Số lượng tồn kho"
+                    name="stock"
+                    type="number"
+                    value={formData.stock}
+                    onChange={handleInputChange}
+                    inputProps={{ min: 0 }}
+                    size="small"
+                    helperText="Số lượng sản phẩm hiện có trong kho"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="Ngưỡng tồn kho tối thiểu"
+                    name="minStockThreshold"
+                    type="number"
+                    value={formData.minStockThreshold}
+                    onChange={handleInputChange}
+                    inputProps={{ min: 1 }}
+                    size="small"
+                    helperText="Cảnh báo khi tồn kho dưới ngưỡng này"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '&.Mui-focused fieldset': {
+                          borderColor: formData.stock < formData.minStockThreshold ? 'warning.main' : 'primary.main',
+                        },
+                      },
+                    }}
+                  />
+                  {formData.stock < formData.minStockThreshold && (
+                    <Chip 
+                      icon={<WarningIcon />}
+                      label="Tồn kho thấp" 
+                      color="warning" 
+                      size="small" 
+                      sx={{ mt: 0.5 }}
+                    />
+                  )}
+                </Grid>
+              </Grid>
             </Box>
 
             {/* Hình ảnh */}
