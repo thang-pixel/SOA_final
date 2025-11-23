@@ -7,7 +7,8 @@ const amqp = require('amqplib');
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
-
+const fontPath = path.join(__dirname, 'fonts', 'arial.ttf');
+const fontBoldPath = path.join(__dirname, 'fonts', 'arialbd.ttf');
 const app = express();
 
 app.use(express.json());
@@ -391,12 +392,10 @@ async function generatePDF(report, data) {
       const stream = fs.createWriteStream(filePath);
       doc.pipe(stream);
       
-      // Đăng ký font tiếng Việt (sử dụng font có sẵn trong hệ thống)
-      // Bạn có thể thay thế bằng đường dẫn đến font .ttf của riêng bạn
       try {
         // Sử dụng font Arial từ Windows
-        const fontPath = 'C:/Windows/Fonts/arial.ttf';
-        const fontBoldPath = 'C:/Windows/Fonts/arialbd.ttf';
+        const fontPath = path.join(__dirname, 'fonts', 'ARIAL.TTF');
+        const fontBoldPath = path.join(__dirname, 'fonts', 'ARIALBD.TTF');
         
         if (fs.existsSync(fontPath)) {
           doc.registerFont('Arial', fontPath);
