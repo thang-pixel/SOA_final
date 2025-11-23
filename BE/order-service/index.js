@@ -90,6 +90,20 @@ const exportOrderSchema = new mongoose.Schema({
 
 const ExportOrder = mongoose.model('ExportOrder', exportOrderSchema);
 
+
+
+// Log hoạt động xuất hàng cho từng sản phẩm
+    for (const item of items) {
+      await logActivity(createdBy, 'approve_export_order', `Xuất kho ${item.productName} - SL: ${item.quantity}`, {
+        receiptCode,
+        customerName,
+        productId: item.productId,
+        productCode: item.productCode,
+        quantity: item.quantity
+      });
+    }
+
+
 // API tạo phiếu xuất hàng
 app.post('/export/create', async (req, res) => {
   try {
