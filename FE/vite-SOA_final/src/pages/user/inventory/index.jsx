@@ -637,7 +637,7 @@ function Inventory() {
 
       {/* Statistics Cards */}
       <Grid container spacing={3} mb={3}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={3} size={3}>
           <StatCard
             title="Tổng sản phẩm"
             value={items.length}
@@ -645,7 +645,7 @@ function Inventory() {
           />
         </Grid>
         
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={3} size={3}>
           <StatCard
             title="Tổng tồn kho"
             value={statistics.totalStock.toLocaleString()}
@@ -653,7 +653,7 @@ function Inventory() {
           />
         </Grid>
         
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={3} size={3}>
           <StatCard
             title="Giá trị tồn kho"
             value={`${statistics.totalValue.toLocaleString('vi-VN')}đ`}
@@ -661,7 +661,7 @@ function Inventory() {
           />
         </Grid>
         
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={3} size={3} >
           <StatCard
             title="Hết hàng"
             value={statistics.outOfStockItems}
