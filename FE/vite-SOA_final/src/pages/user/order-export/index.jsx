@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -40,7 +40,8 @@ import {
   Payment as PaymentIcon,
   Print as PrintIcon,
   CheckCircle as CheckCircleIcon,
-  ShoppingCart as ShoppingCartIcon
+  ShoppingCart as ShoppingCartIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import {
   updateExportItem,
@@ -53,6 +54,7 @@ import {
 import {
   saveExportOrder
 } from '../../../redux/action/orderAction';
+import { fetchInventoryItems } from '../../../redux/action/inventory';
 import { useNotification } from '../../../hooks/useNotification';
 import { useConfirm } from '../../../hooks/useConfirm';
 import NotificationSnackbar from '../../../components/NotificationSnackbar';
@@ -64,6 +66,7 @@ function ExportOrder() {
   
   const { currentExportOrder, loading } = useSelector(state => state.order);
   const { user } = useSelector(state => state.auth);
+  const { items: inventoryItems, loading: inventoryLoading } = useSelector(state => state.inventory);
   
   const [showReceiptDialog, setShowReceiptDialog] = useState(false);
   const [completedOrder, setCompletedOrder] = useState(null);
@@ -85,6 +88,28 @@ function ExportOrder() {
     hideConfirm,
     setLoading: setConfirmLoading
   } = useConfirm();
+
+  // Load inventory data on component mount
+  useEffect(() => {
+    dispatch(fetchInventoryItems());
+  }, [dispatch]);
+
+  // Get current stock for a product
+  const getProductStock = useCallback((productId) => {
+    const product = inventoryItems.find(item => item._id === productId);
+    return product ? (product.stock || 0) : 0;
+  }, [inventoryItems]);
+
+  // Check if product has sufficient stock
+  const checkStockAvailability = useCallback((productId, requestedQuantity) => {
+    const currentStock = getProductStock(productId);
+    return {
+      available: currentStock,
+      sufficient: requestedQuantity <= currentStock,
+      isLowStock: currentStock <= 5,
+      isEmpty: currentStock <= 0
+    };
+  }, [getProductStock]);
 
   const handleBack = useCallback(async () => {
     if (currentExportOrder.items.length > 0) {
@@ -110,10 +135,30 @@ function ExportOrder() {
   const handleQuantityChange = useCallback((index, quantity) => {
     if (quantity < 1) {
       showWarning('Số lượng phải lớn hơn 0');
-      return;
+
     }
 
     const item = currentExportOrder.items[index];
+    const stockCheck = checkStockAvailability(item.productId, quantity);
+    
+    if (!stockCheck.sufficient) {
+      showWarning(
+        `Số lượng xuất (${quantity}) vượt quá tồn kho hiện có (${stockCheck.available}) của sản phẩm "${item.productName}"`,
+        'Không đủ tồn kho',
+        8000
+      );
+
+    }
+
+    // Show warning if quantity is close to stock limit
+    if (stockCheck.isLowStock && quantity > stockCheck.available * 0.8) {
+      showInfo(
+        `Cảnh báo: Sản phẩm "${item.productName}" sắp hết hàng (còn ${stockCheck.available} sản phẩm)`,
+        'Tồn kho thấp',
+        5000
+      );
+    }
+
     const totalPrice = quantity * item.unitPrice;
     
     const updatedItem = {
@@ -123,7 +168,7 @@ function ExportOrder() {
     };
     
     dispatch(updateExportItem({ index, item: updatedItem }));
-  }, [currentExportOrder.items, dispatch, showWarning]);
+  }, [currentExportOrder.items, dispatch, showWarning, showInfo, checkStockAvailability]);
 
   const handleRemoveItem = useCallback(async (index) => {
     const item = currentExportOrder.items[index];
@@ -158,9 +203,6 @@ function ExportOrder() {
   const handlePaymentMethodChange = useCallback((e) => {
     const method = e.target.value;
     dispatch(setExportPaymentMethod(method));
-    
-    const methodText = method === 'cash' ? 'Tiền mặt' : 
-                      method === 'card' ? 'Thẻ' : 'Chuyển khoản';
   }, [dispatch]);
 
   const handleNotesChange = useCallback((e) => {
@@ -179,8 +221,34 @@ function ExportOrder() {
       return false;
     }
 
+    // Check stock for each item
+    const outOfStockItems = [];
+    currentExportOrder.items.forEach(item => {
+      const stockCheck = checkStockAvailability(item.productId, item.quantity);
+      if (!stockCheck.sufficient) {
+        outOfStockItems.push({
+          name: item.productName,
+          requested: item.quantity,
+          available: stockCheck.available
+        });
+      }
+    });
+
+    if (outOfStockItems.length > 0) {
+      const errorMessage = outOfStockItems
+        .map(item => `• ${item.name}: yêu cầu ${item.requested}, tồn kho ${item.available}`)
+        .join('\n');
+      
+      showError(
+        `Các sản phẩm sau vượt quá tồn kho:\n${errorMessage}`,
+        'Không đủ hàng tồn kho',
+        10000
+      );
+      return false;
+    }
+
     return true;
-  }, [currentExportOrder, showWarning]);
+  }, [currentExportOrder, showWarning, showError, checkStockAvailability]);
 
   const handleCheckout = useCallback(async () => {
     if (!validateOrder()) return;
@@ -317,15 +385,27 @@ function ExportOrder() {
   const handleCloseReceipt = useCallback(() => {
     setShowReceiptDialog(false);
     dispatch(clearCurrentExportOrder());
-     navigate('/inventory');
+    navigate('/inventory');
   }, [dispatch, navigate]);
 
-  // Tính tổng số lượng
+  // Tính tổng số lượng và kiểm tra tồn kho
   const summary = useMemo(() => {
     const totalQuantity = currentExportOrder.items.reduce((sum, item) => sum + item.quantity, 0);
     const totalItems = currentExportOrder.items.length;
-    return { totalQuantity, totalItems };
-  }, [currentExportOrder.items]);
+    
+    // Count items with stock issues
+    const stockIssues = currentExportOrder.items.filter(item => {
+      const stockCheck = checkStockAvailability(item.productId, item.quantity);
+      return !stockCheck.sufficient || stockCheck.isEmpty;
+    });
+    
+    return { 
+      totalQuantity, 
+      totalItems,
+      hasStockIssues: stockIssues.length > 0,
+      stockIssuesCount: stockIssues.length
+    };
+  }, [currentExportOrder.items, checkStockAvailability]);
 
   // Kiểm tra nếu không có sản phẩm
   if (currentExportOrder.items.length === 0) {
@@ -378,13 +458,27 @@ function ExportOrder() {
           variant="contained"
           startIcon={<CheckCircleIcon />}
           onClick={handleCheckout}
-          disabled={loading || confirmState.loading || currentExportOrder.items.length === 0}
+          disabled={loading || confirmState.loading || currentExportOrder.items.length === 0 || summary.hasStockIssues || inventoryLoading}
           size="large"
           sx={{ textTransform: 'none', px: 4 }}
         >
-          {confirmState.loading ? 'Đang xử lý...' : 'Thanh toán'}
+          {confirmState.loading ? 'Đang xử lý...' : 
+           inventoryLoading ? 'Đang tải...' :
+           summary.hasStockIssues ? 'Kiểm tra tồn kho' : 'Thanh toán'}
         </Button>
       </Box>
+
+      {/* Global stock warning */}
+      {summary.hasStockIssues && (
+        <Alert severity="error" sx={{ mb: 3 }} icon={<WarningIcon />}>
+          <Typography variant="body1" fontWeight={600}>
+            Cảnh báo tồn kho: {summary.stockIssuesCount} sản phẩm có vấn đề về số lượng
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 1 }}>
+            Vui lòng kiểm tra và điều chỉnh số lượng các sản phẩm được đánh dấu màu đỏ trước khi thanh toán.
+          </Typography>
+        </Alert>
+      )}
 
       <Grid container spacing={3}>
         {/* Form thông tin khách hàng */}
@@ -519,6 +613,14 @@ function ExportOrder() {
             <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
               <Typography variant="h6" fontWeight={600}>
                 Giỏ hàng ({summary.totalItems} sản phẩm)
+                {summary.hasStockIssues && (
+                  <Chip 
+                    label={`${summary.stockIssuesCount} vấn đề tồn kho`}
+                    color="error"
+                    size="small"
+                    sx={{ ml: 2 }}
+                  />
+                )}
               </Typography>
             </Box>
             
@@ -529,6 +631,7 @@ function ExportOrder() {
                     <TableCell>STT</TableCell>
                     <TableCell>Mã hàng</TableCell>
                     <TableCell>Tên hàng</TableCell>
+                    <TableCell align="center">Tồn kho</TableCell>
                     <TableCell align="center">Số lượng</TableCell>
                     <TableCell align="center">Đơn giá</TableCell>
                     <TableCell align="center">Thành tiền</TableCell>
@@ -536,63 +639,100 @@ function ExportOrder() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {currentExportOrder.items.map((item, index) => (
-                    <TableRow 
-                      key={`${item.productId}-${index}`}
-                      sx={{
-                        backgroundColor: item.quantity <= 0 ? 'error.light' : 'transparent'
-                      }}
-                    >
-                      <TableCell>{index + 1}</TableCell>
-                      <TableCell>
-                        <Typography color="primary" fontWeight={500}>
-                          {item.productCode}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {item.productName}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="center">
-                        <TextField
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) => handleQuantityChange(index, parseInt(e.target.value) || 0)}
-                          inputProps={{ min: 1, style: { textAlign: 'center' } }}
-                          size="small"
-                          sx={{ width: 80 }}
-                          error={item.quantity <= 0}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Typography variant="body2">
-                          {item.unitPrice.toLocaleString('vi-VN')}đ
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="center">
-                        <Typography fontWeight={600} color="success.main">
-                          {item.totalPrice.toLocaleString('vi-VN')}đ
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="center">
-                        <Tooltip title={`Xóa ${item.productName}`}>
-                          <IconButton 
-                            onClick={() => handleRemoveItem(index)}
-                            color="error"
+                  {currentExportOrder.items.map((item, index) => {
+                    const stockCheck = checkStockAvailability(item.productId, item.quantity);
+                    const isOverStock = !stockCheck.sufficient;
+                    const isLowStock = stockCheck.isLowStock;
+                    const isEmpty = stockCheck.isEmpty;
+                    
+                    return (
+                      <TableRow 
+                        key={`${item.productId}-${index}`}
+                        // sx={{
+                        //   backgroundColor: isOverStock || isEmpty ? 'error.light' : 
+                        //                  item.quantity <= 0 ? 'warning.light' : 'transparent'
+                        // }}
+                      >
+                        <TableCell>{index + 1}</TableCell>
+                        <TableCell>
+                          <Typography color="primary" fontWeight={500}>
+                            {item.productCode}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {item.productName}
+                          </Typography>
+                          {isOverStock && (
+                            <Typography variant="caption" color="error" display="block">
+                              ⚠️ Vượt quá tồn kho
+                            </Typography>
+                          )}
+                          {isEmpty && (
+                            <Typography variant="caption" color="error" display="block">
+                              ❌ Hết hàng
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell align="center">
+                          <Chip
+                            label={stockCheck.available}
                             size="small"
+                            color={isEmpty ? 'error' : isLowStock ? 'warning' : 'success'}
+                            variant={isOverStock ? 'filled' : 'outlined'}
+                          />
+                        </TableCell>
+                        <TableCell align="center">
+                          <TextField
+                            type="number"
+                            value={item.quantity}
+                            onChange={(e) => handleQuantityChange(index, parseInt(e.target.value) || 0)}
+                            inputProps={{ 
+                              min: 1, 
+                              max: stockCheck.available,
+                              style: { textAlign: 'center' } 
+                            }}
+                            size="small"
+                            sx={{ width: 80 }}
+                            error={item.quantity <= 0 || isOverStock || isEmpty}
+                            helperText={
+                              isEmpty ? 'Hết hàng' :
+                              isOverStock ? `Max: ${stockCheck.available}` : ''
+                            }
+                          />
+                        </TableCell>
+                        <TableCell align="center">
+                          <Typography variant="body2">
+                            {item.unitPrice.toLocaleString('vi-VN')}đ
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="center">
+                          <Typography 
+                            fontWeight={600} 
+                            color={isOverStock || isEmpty ? 'error.main' : 'success.main'}
                           >
-                            <DeleteIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            {item.totalPrice.toLocaleString('vi-VN')}đ
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="center">
+                          <Tooltip title={`Xóa ${item.productName}`}>
+                            <IconButton 
+                              onClick={() => handleRemoveItem(index)}
+                              color="error"
+                              size="small"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
 
-            {/* Footer bảng */}
+            {/* Footer bảng với cảnh báo tồn kho */}
             <Box sx={{ p: 2, bgcolor: 'grey.50', borderTop: '1px solid', borderColor: 'divider' }}>
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs={12} sm={6}>
@@ -600,6 +740,15 @@ function ExportOrder() {
                     Tổng cộng: <strong>{summary.totalItems}</strong> sản phẩm, 
                     <strong> {summary.totalQuantity}</strong> số lượng
                   </Typography>
+                  
+                  {/* Cảnh báo tồn kho */}
+                  {summary.hasStockIssues && (
+                    <Alert severity="error" sx={{ mt: 1, py: 0.5 }}>
+                      <Typography variant="caption">
+                        ⚠️ {summary.stockIssuesCount} sản phẩm có vấn đề về tồn kho. Vui lòng kiểm tra lại số lượng.
+                      </Typography>
+                    </Alert>
+                  )}
                 </Grid>
                 <Grid item xs={12} sm={6} sx={{ textAlign: { sm: 'right' } }}>
                   <Typography variant="h6" fontWeight={600} color="primary.main">

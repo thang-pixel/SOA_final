@@ -168,6 +168,43 @@ app.put('/product/update-stock/:id', async (req, res) => {
     }
 });
 
+// API lấy lịch sử xuất nhập kho của một sản phẩm
+app.get('/product/history/:productId', async (req, res) => {
+    try {
+        const { productId } = req.params;
+        const { page = 1, limit = 50 } = req.query;
+        
+        // Lấy thông tin sản phẩm
+        const product = await inventory.findById(productId);
+        if (!product) {
+            return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+        }
+
+        // Gọi API từ order-service để lấy lịch sử
+        const [importHistory, exportHistory] = await Promise.all([
+            // Lấy lịch sử nhập hàng
+            axios.get(`http://localhost:3003/import/history/${productId}?page=${page}&limit=${limit}`).catch(() => ({ data: [] })),
+            // Lấy lịch sử xuất hàng  
+            axios.get(`http://localhost:3003/export/history/${productId}?page=${page}&limit=${limit}`).catch(() => ({ data: [] }))
+        ]);
+
+        // Kết hợp và sắp xếp theo thời gian
+        const allHistory = [
+            ...importHistory.data.map(item => ({ ...item, type: 'import' })),
+            ...exportHistory.data.map(item => ({ ...item, type: 'export' }))
+        ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        res.json({
+            product,
+            history: allHistory,
+            totalCount: allHistory.length
+        });
+    } catch (error) {
+        console.error('Error fetching product history:', error);
+        res.status(500).json({ message: 'Lỗi server', error: error.message });
+    }
+});
+
 // Helper function để kiểm tra và gửi thông báo tồn kho thấp
 async function checkLowStockAndNotify(product) {
   try {
@@ -191,6 +228,69 @@ async function checkLowStockAndNotify(product) {
     console.error('Error sending low stock notification:', error.message);
   }
 }
+
+
+// API xóa sản phẩm đơn lẻ
+app.delete('/product/delete/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { deletedBy } = req.body;
+        
+        const product = await inventory.findById(id);
+        if (!product) {
+            return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+        }
+        
+        await inventory.findByIdAndDelete(id);
+        
+        // Log hoạt động xóa sản phẩm
+        const username = deletedBy || 'admin';
+        await logActivity(username, 'delete_product', `Đã xóa sản phẩm ${product.name} (${product.code})`, {
+            productId: product._id,
+            productCode: product.code,
+            productName: product.name,
+            stock: product.stock
+        });
+        
+        res.json({ message: 'Xóa sản phẩm thành công', deletedProduct: product });
+    } catch (error) {
+        console.error('Error deleting product:', error);
+        res.status(500).json({ message: 'Lỗi server', error: error.message });
+    }
+});
+
+// API xóa nhiều sản phẩm
+app.delete('/product/delete-multiple', async (req, res) => {
+    try {
+        const { productIds, deletedBy } = req.body;
+        
+        if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
+            return res.status(400).json({ message: 'Danh sách sản phẩm không hợp lệ' });
+        }
+        
+        // Lấy thông tin các sản phẩm trước khi xóa để log
+        const productsToDelete = await inventory.find({ _id: { $in: productIds } });
+        
+        const result = await inventory.deleteMany({ _id: { $in: productIds } });
+        
+        // Log hoạt động xóa nhiều sản phẩm
+        const username = deletedBy || 'admin';
+        await logActivity(username, 'delete_multiple_products', `Đã xóa ${result.deletedCount} sản phẩm`, {
+            deletedCount: result.deletedCount,
+            productIds: productIds,
+            deletedProducts: productsToDelete.map(p => ({ id: p._id, code: p.code, name: p.name }))
+        });
+        
+        res.json({ 
+            message: `Xóa thành công ${result.deletedCount} sản phẩm`,
+            deletedCount: result.deletedCount,
+            deletedProducts: productsToDelete
+        });
+    } catch (error) {
+        console.error('Error deleting multiple products:', error);
+        res.status(500).json({ message: 'Lỗi server', error: error.message });
+    }
+});
 
 // API kiểm tra tất cả sản phẩm dưới ngưỡng tồn kho
 app.get('/product/low-stock', async (req, res) => {

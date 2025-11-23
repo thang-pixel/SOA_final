@@ -157,6 +157,71 @@ app.get('/export/:id', async (req, res) => {
   }
 });
 
+
+
+// API lấy lịch sử nhập hàng theo sản phẩm
+app.get('/import/history/:productId', async (req, res) => {
+    try {
+        const { productId } = req.params;
+        const { page = 1, limit = 50 } = req.query;
+        
+        const orders = await ImportOrder.find({
+            'items.productId': productId
+        })
+        .select('orderCode supplier status items totalAmount createdAt completedAt warehouseReceiptCode')
+        .sort({ createdAt: -1 })
+        .limit(parseInt(limit))
+        .skip((parseInt(page) - 1) * parseInt(limit));
+
+        // Lọc chỉ những items liên quan đến sản phẩm này
+        const history = orders.map(order => {
+            const relevantItems = order.items.filter(item => item.productId === productId);
+            return {
+                ...order.toObject(),
+                items: relevantItems
+            };
+        });
+
+        res.json(history);
+    } catch (error) {
+        console.error('Error fetching import history:', error);
+        res.status(500).json({ message: 'Lỗi lấy lịch sử nhập hàng' });
+    }
+});
+
+// API lấy lịch sử xuất hàng theo sản phẩm
+app.get('/export/history/:productId', async (req, res) => {
+    try {
+        const { productId } = req.params;
+        const { page = 1, limit = 50 } = req.query;
+        
+        const orders = await ExportOrder.find({
+            'items.productId': productId
+        })
+        .select('receiptCode customerName customerPhone items totalAmount paymentMethod createdAt')
+        .sort({ createdAt: -1 })
+        .limit(parseInt(limit))
+        .skip((parseInt(page) - 1) * parseInt(limit));
+
+        // Lọc chỉ những items liên quan đến sản phẩm này
+        const history = orders.map(order => {
+            const relevantItems = order.items.filter(item => item.productId === productId);
+            return {
+                ...order.toObject(),
+                items: relevantItems
+            };
+        });
+
+        res.json(history);
+    } catch (error) {
+        console.error('Error fetching export history:', error);
+        res.status(500).json({ message: 'Lỗi lấy lịch sử xuất hàng' });
+    }
+});
+
+
+
+
 // API thống kê xuất hàng theo ngày/tháng
 app.get('/export/stats/:period', async (req, res) => {
   try {
