@@ -31,7 +31,7 @@ const auth = mongoose.model('Auth', authSchema);
 // Helper function để log hoạt động
 async function logActivity(username, action, description, metadata = {}) {
   try {
-    await axios.post('http://activity-service:3005/activity/log', {
+    await axios.post('http://localhost:3005/activity/log', {
       username,
       action,
       description,

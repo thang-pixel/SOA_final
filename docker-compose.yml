@@ -9,8 +9,8 @@ services:
       - "5672:5672"      # AMQP port
       - "15672:15672"    # Management UI
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin123
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
@@ -49,7 +49,7 @@ services:
       - "3002:3002"
     environment:
       - PORT=3002
-      - MONGO_URI=${INVENTORY_MONGO_URI}
+      - MONGO_URI=${INVENTORY_MONGO_URI:-mongodb+srv://thang:123@cluster-soa-final.m1tinrp.mongodb.net/inventory-db}
     networks:
       - soa-network
     restart: unless-stopped
@@ -64,8 +64,8 @@ services:
       - "3003:3003"
     environment:
       - PORT=3003
-      - MONGO_URI=${ORDER_MONGO_URI}
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - MONGO_URI=${ORDER_MONGO_URI:-mongodb+srv://thang:123@cluster-soa-final.m1tinrp.mongodb.net/order-db}
+      - RABBITMQ_URL=amqp://admin:admin123@rabbitmq:5672
     networks:
       - soa-network
     depends_on:
@@ -83,8 +83,8 @@ services:
       - "3004:3004"
     environment:
       - PORT=3004
-      - MONGO_URI=${NOTIFICATION_MONGO_URI}
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - MONGO_URI=${NOTIFICATION_MONGO_URI:-mongodb+srv://thang:123@cluster-soa-final.m1tinrp.mongodb.net/notification-db}
+      - RABBITMQ_URL=amqp://admin:admin123@rabbitmq:5672
       - EMAIL=tenk8595@gmail.com
       - EMAIL_PASSWORD=nhsu elfh hewr cahq
     networks:
@@ -108,7 +108,23 @@ services:
     networks:
       - soa-network
     restart: unless-stopped
-
+  # Report Service
+  report-service:
+    build:
+      context: ./BE/report-service
+      dockerfile: Dockerfile
+    container_name: soa-report-service
+    ports:
+      - "3006:3006"
+    environment:
+      - PORT=3006
+      - MONGO_URI=${REPORT_MONGO_URI:-mongodb+srv://thang:123@cluster-soa-final.m1tinrp.mongodb.net/report-db}
+    networks:
+      - soa-network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
   # API Gateway
   api-gateway:
     build:

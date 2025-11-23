@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-
+import { getProductActivityHistory } from '../../../redux/action/activityAction';
 // Components
 import AddProductPopup from '../../../components/AddProductPopup';
 import NotificationSnackbar from '../../../components/NotificationSnackbar';
@@ -162,30 +162,69 @@ const StockChip = React.memo(({ stock, onClick, productInfo }) => {
   );
 });
 
-const DateCell = React.memo(({ value }) => {
-  const formattedDate = useMemo(() => {
-    if (!value) return '';
+const DateCell = React.memo(({ value, productId, historyMap }) => {
+  const { formattedDate, updateType } = useMemo(() => {
+    if (!value) return { formattedDate: '', updateType: '' };
     
     // Xử lý cả Date object và string
     const date = value instanceof Date ? value : new Date(value);
     
     // Kiểm tra xem date có hợp lệ không
-    if (isNaN(date.getTime())) return '';
+    if (isNaN(date.getTime())) return { formattedDate: '', updateType: '' };
     
     // Format theo định dạng Việt Nam: dd/mm/yyyy hh:mm
-    return date.toLocaleString('vi-VN', {
+    const formatted = date.toLocaleString('vi-VN', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
     });
-  }, [value]);
+
+    // Tìm loại cập nhật cuối cùng
+    let updateType = 'Tạo mới';
+    if (productId && historyMap && historyMap[productId]) {
+      const history = historyMap[productId];
+      if (history.logs && history.logs.length > 0) {
+        const latestLog = history.logs.reduce((latest, log) => {
+          const logDate = new Date(log.timestamp);
+          const latestDate = new Date(latest.timestamp);
+          return logDate > latestDate ? log : latest;
+        }, history.logs[0]);
+
+        // Mapping action to Vietnamese
+        const actionMap = {
+          create_import_order: 'Tạo đơn nhập',
+          submit_import_order: 'Gửi đơn nhập',
+          create_warehouse_receipt: 'Nhập kho',
+          create_export_order: 'Tạo đơn xuất',
+          approve_export_order: 'Xuất kho',
+          update_product: 'Cập nhật SP'
+        };
+        updateType = actionMap[latestLog.action] || 'Cập nhật';
+      }
+    }
+    
+    return { formattedDate: formatted, updateType };
+  }, [value, productId, historyMap]);
 
   return (
-    <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
-      {formattedDate}
-    </Typography>
+    <Box textAlign="center">
+      <Typography variant="body2" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
+        {formattedDate}
+      </Typography>
+      <Typography 
+        variant="caption" 
+        sx={{ 
+          fontSize: '0.75rem',
+          color: 'text.secondary',
+          display: 'block',
+          lineHeight: 1
+        }}
+      >
+        {updateType}
+      </Typography>
+    </Box>
   );
 });
 
@@ -271,7 +310,7 @@ function Inventory() {
   const [selectionModel, setSelectionModel] = useState([]);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  
+  const [productHistoryMap, setProductHistoryMap] = useState({}); 
   // Hooks
   const {
     notification,
@@ -293,6 +332,57 @@ function Inventory() {
   useEffect(() => {
     dispatch(fetchInventoryItems());
   }, [dispatch]);
+
+  // Fetch history data cho tất cả sản phẩm
+  useEffect(() => {
+    const fetchAllProductHistory = async () => {
+      if (items.length === 0) return;
+      
+      const historyPromises = items.map(async (item) => {
+        try {
+          const historyData = await dispatch(getProductActivityHistory(item._id));
+          return { productId: item._id, historyData };
+        } catch (error) {
+          console.error(`Error fetching history for product ${item._id}:`, error);
+          return { productId: item._id, historyData: null };
+        }
+      });
+
+      const results = await Promise.allSettled(historyPromises);
+      const historyMap = {};
+      
+      results.forEach((result) => {
+        if (result.status === 'fulfilled' && result.value.historyData) {
+          historyMap[result.value.productId] = result.value.historyData;
+        }
+      });
+      
+      setProductHistoryMap(historyMap);
+    };
+
+    fetchAllProductHistory();
+  }, [items, dispatch]);
+
+
+  // Function để lấy ngày cập nhật cuối cùng từ history
+  const getLastUpdatedDate = useCallback((productId) => {
+    const history = productHistoryMap[productId];
+    if (!history || !history.logs || history.logs.length === 0) {
+      // Nếu không có lịch sử, trả về ngày tạo ban đầu
+      const product = items.find(item => item._id === productId);
+      return product?.createdAt || new Date();
+    }
+
+    // Lấy timestamp mới nhất từ logs
+    const latestLog = history.logs.reduce((latest, log) => {
+      const logDate = new Date(log.timestamp);
+      const latestDate = new Date(latest.timestamp);
+      return logDate > latestDate ? log : latest;
+    }, history.logs[0]);
+
+    return latestLog.timestamp;
+  }, [productHistoryMap, items]);
+
 
   // Memoized filtered items
   const filteredItems = useMemo(() => {
@@ -567,14 +657,32 @@ function Inventory() {
       ),
     },
     {
-      field: 'createdAt',
-      headerName: 'Ngày tạo',
-      width: 140,
+      field: 'lastUpdated',
+      headerName: 'Cập nhật cuối',
+      width: 170,
       headerAlign: 'center',
       align: 'center',
-      renderCell: (params) => <DateCell value={params.row.createdAt} />,
+      valueGetter: (value, row) => {
+        // Sử dụng cú pháp mới của MUI DataGrid v6+
+        return getLastUpdatedDate(row._id);
+      },
+      renderCell: (params) => {
+        const lastUpdatedDate = getLastUpdatedDate(params.row._id);
+        return (
+          <DateCell 
+            value={lastUpdatedDate} 
+            productId={params.row._id}
+            historyMap={productHistoryMap}
+          />
+        );
+      },
+      sortComparator: (v1, v2) => {
+        const date1 = new Date(v1);
+        const date2 = new Date(v2);
+        return date1.getTime() - date2.getTime();
+      }
     },
-  ], [handleStockClick]);
+  ], [handleStockClick, getLastUpdatedDate, productHistoryMap]);
 
   // Loading state
   if (loading) {
