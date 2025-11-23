@@ -32,6 +32,7 @@ const inventorySchema = new mongoose.Schema({
   cost: { type: Number, required: true },                       // Giá vốn
   stock: { type: Number, required: true },                      // Tồn kho
   ordered: { type: Number, default: 0 },                        // Khách đặt
+  minStockThreshold: { type: Number, default: 10 },             // Ngưỡng tồn kho tối thiểu
   createdAt: { type: Date, default: Date.now },                 // Thời gian tạo
   expectedOutOfStock: { type: Date },                           // Dự kiến hết hàng
   image: { type: String  },                                      // Ảnh sản phẩm
@@ -156,10 +157,112 @@ app.put('/product/update-stock/:id', async (req, res) => {
         }
         
         await product.save();
+        
+        // Kiểm tra và gửi thông báo nếu tồn kho thấp
+        await checkLowStockAndNotify(product);
+        
         res.json(product);
     } catch (error) {
         console.error('Error updating stock:', error);
         res.status(500).json({ message: 'Lỗi cập nhật tồn kho', error: error.message });
+    }
+});
+
+// Helper function để kiểm tra và gửi thông báo tồn kho thấp
+async function checkLowStockAndNotify(product) {
+  try {
+    if (product.stock < product.minStockThreshold) {
+      await axios.post('http://localhost:3004/notifications/create', {
+        title: '⚠️ Cảnh báo: Tồn kho thấp',
+        message: `Sản phẩm "${product.name}" (${product.code}) chỉ còn ${product.stock} sản phẩm, dưới ngưỡng tối thiểu ${product.minStockThreshold}`,
+        type: 'warning',
+        metadata: {
+          productId: product._id,
+          productCode: product.code,
+          productName: product.name,
+          currentStock: product.stock,
+          minThreshold: product.minStockThreshold,
+          supplier: product.supplier
+        }
+      });
+      console.log(`Low stock notification sent for ${product.code}`);
+    }
+  } catch (error) {
+    console.error('Error sending low stock notification:', error.message);
+  }
+}
+
+// API kiểm tra tất cả sản phẩm dưới ngưỡng tồn kho
+app.get('/product/low-stock', async (req, res) => {
+    try {
+        const lowStockProducts = await inventory.find({
+            $expr: { $lt: ['$stock', '$minStockThreshold'] }
+        }).sort({ stock: 1 });
+        
+        res.json({
+            count: lowStockProducts.length,
+            products: lowStockProducts
+        });
+    } catch (error) {
+        console.error('Error fetching low stock products:', error);
+        res.status(500).json({ message: 'Lỗi server' });
+    }
+});
+
+// API cập nhật ngưỡng tồn kho tối thiểu
+app.put('/product/update-threshold/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { minStockThreshold } = req.body;
+        
+        const product = await inventory.findByIdAndUpdate(
+            id,
+            { minStockThreshold },
+            { new: true, runValidators: true }
+        );
+        
+        if (!product) {
+            return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+        }
+        
+        // Kiểm tra ngay sau khi cập nhật ngưỡng
+        await checkLowStockAndNotify(product);
+        
+        const username = req.body.updatedBy || 'admin';
+        await logActivity(username, 'update_threshold', `Đã cập nhật ngưỡng tồn kho cho ${product.name} (${product.code}) thành ${minStockThreshold}`, {
+          productId: product._id,
+          productCode: product.code,
+          minStockThreshold
+        });
+        
+        res.json(product);
+    } catch (error) {
+        console.error('Error updating threshold:', error);
+        res.status(500).json({ message: 'Lỗi cập nhật ngưỡng', error: error.message });
+    }
+});
+
+// API quét tất cả sản phẩm và gửi thông báo cho những sản phẩm dưới ngưỡng
+app.post('/product/check-all-low-stock', async (req, res) => {
+    try {
+        const lowStockProducts = await inventory.find({
+            $expr: { $lt: ['$stock', '$minStockThreshold'] }
+        });
+        
+        let notificationsSent = 0;
+        for (const product of lowStockProducts) {
+            await checkLowStockAndNotify(product);
+            notificationsSent++;
+        }
+        
+        res.json({
+            message: `Đã quét xong. Tìm thấy ${lowStockProducts.length} sản phẩm dưới ngưỡng tồn kho.`,
+            count: lowStockProducts.length,
+            notificationsSent
+        });
+    } catch (error) {
+        console.error('Error checking all low stock:', error);
+        res.status(500).json({ message: 'Lỗi quét tồn kho', error: error.message });
     }
 });
 

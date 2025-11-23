@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import axios from 'axios';
+import API_DOMAIN from '../../../constants/apiDomain';
 import {
   Box,
   Paper,
@@ -33,13 +35,15 @@ import {
   Send as SendIcon,
   Business as BusinessIcon,
   Receipt as ReceiptIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import {
   updateImportItem,
   removeImportItem,
   setImportSupplier,
   setImportNotes,
-  clearCurrentImportOrder
+  clearCurrentImportOrder,
+  addImportItem
 } from '../../../redux/reducers/orderSlice';
 import {
   saveImportOrder,
@@ -76,6 +80,7 @@ const OrderSteps = React.memo(({ activeStep }) => {
 function ImportOrder() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   
   const { currentImportOrder, loading } = useSelector(state => state.order);
   const { user } = useSelector(state => state.auth);
@@ -97,6 +102,58 @@ function ImportOrder() {
     hideConfirm,
     setLoading: setConfirmLoading
   } = useConfirm();
+
+  // Xử lý auto-select sản phẩm từ notification tồn kho thấp
+  useEffect(() => {
+    const loadLowStockProduct = async () => {
+      if (location.state?.lowStockProduct && location.state?.autoSelectProduct) {
+        const { productId, productCode, productName, currentStock, minThreshold, supplier } = location.state.lowStockProduct;
+        
+        try {
+          // Fetch product details từ API
+          const response = await axios.get(`${API_DOMAIN}/api/inventory/product/getAll`);
+          const product = response.data.find(p => p._id === productId);
+          
+          if (product) {
+            // Tính số lượng cần nhập (ít nhất bằng ngưỡng tối thiểu)
+            const quantityNeeded = Math.max(minThreshold - currentStock, minThreshold);
+            
+            // Tạo import item
+            const importItem = {
+              productId: product._id,
+              productCode: product.code,
+              productName: product.name,
+              quantity: quantityNeeded,
+              unitPrice: product.cost || 0,
+              discount: 0,
+              totalPrice: quantityNeeded * (product.cost || 0)
+            };
+            
+            // Thêm vào đơn hàng
+            dispatch(addImportItem(importItem));
+            
+            // Set supplier nếu có
+            if (supplier) {
+              dispatch(setImportSupplier(supplier));
+            }
+            
+            showWarning(
+              `Sản phẩm "${productName}" (${productCode}) đang ở mức tồn kho thấp (${currentStock}/${minThreshold}). Đã tự động thêm vào đơn nhập hàng với số lượng đề xuất: ${quantityNeeded}`,
+              8000
+            );
+          }
+        } catch (error) {
+          console.error('Error loading low stock product:', error);
+          showError('Không thể tải thông tin sản phẩm');
+        }
+        
+        // Clear location state để tránh reload lại
+        navigate(location.pathname, { replace: true, state: {} });
+      }
+    };
+    
+    loadLowStockProduct();
+  }, [location, dispatch, navigate, showWarning, showError]);
 
   // Danh sách nhà cung cấp mẫu
   const suppliers = useMemo(() => [
@@ -395,6 +452,26 @@ function ImportOrder() {
 
       {/* Progress Steps */}
       <OrderSteps activeStep={0} />
+
+      {/* Alert cho sản phẩm tồn kho thấp */}
+      {location.state?.lowStockProduct && (
+        <Alert 
+          severity="warning" 
+          icon={<WarningIcon />}
+          sx={{ mb: 3 }}
+          onClose={() => navigate(location.pathname, { replace: true, state: {} })}
+        >
+          <Typography variant="body2" fontWeight={600}>
+            Cảnh báo tồn kho thấp!
+          </Typography>
+          <Typography variant="body2">
+            Sản phẩm <strong>{location.state.lowStockProduct.productName}</strong> ({location.state.lowStockProduct.productCode}) 
+            chỉ còn <strong>{location.state.lowStockProduct.currentStock}</strong> sản phẩm, 
+            dưới ngưỡng tối thiểu <strong>{location.state.lowStockProduct.minThreshold}</strong>. 
+            Đã tự động thêm vào đơn nhập hàng.
+          </Typography>
+        </Alert>
+      )}
 
       <Grid container spacing={3}>
         {/* Form thông tin */}

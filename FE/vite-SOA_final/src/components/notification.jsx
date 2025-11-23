@@ -89,6 +89,18 @@ const NotificationDropdown = () => {
       return;
     }
 
+    // Xử lý notification tồn kho thấp - chuyển đến trang nhập hàng với sản phẩm đã chọn
+    if (notification.metadata?.productId) {
+      handleClose();
+      navigate('/user/order', { 
+        state: { 
+          lowStockProduct: notification.metadata,
+          autoSelectProduct: true 
+        } 
+      });
+      return;
+    }
+
     // Navigate based on notification type
     if (notification.metadata) {
       const { type, receiptCode, orderCode } = notification.metadata;
@@ -117,13 +129,15 @@ const NotificationDropdown = () => {
     let filtered = notifications;
 
     if (selectedTab === 1) {
-      // Chỉ notifications liên quan đến nhập hàng
+      // Chỉ notifications liên quan đến nhập hàng (bao gồm low stock warnings)
       filtered = notifications.filter(notification => {
         const metadata = notification.metadata || {};
         return metadata.type !== 'export' && metadata.type !== 'report_completed' && (
           notification.title.toLowerCase().includes('nhập') ||
           notification.title.toLowerCase().includes('cung cấp') ||
+          notification.title.toLowerCase().includes('tồn kho') ||
           notification.message.toLowerCase().includes('nhập') ||
+          metadata.productId || // Low stock warning
           metadata.action === 'confirmed' ||
           metadata.action === 'rejected' ||
           metadata.action === 'create_warehouse_receipt'
@@ -153,6 +167,11 @@ const NotificationDropdown = () => {
   const getNotificationIcon = (notification) => {
     const iconProps = { fontSize: 'small' };
     const metadata = notification.metadata || {};
+
+    // Icon cho low stock warning
+    if (metadata.productId && notification.type === 'warning') {
+      return <WarningIcon {...iconProps} sx={{ color: 'warning.main' }} />;
+    }
 
     // Icon cho báo cáo
     if (metadata.type === 'report_completed') {
@@ -204,6 +223,11 @@ const NotificationDropdown = () => {
 
   const getActivityLabel = (notification) => {
     const metadata = notification.metadata || {};
+    
+    // Low stock warning
+    if (metadata.productId && notification.type === 'warning') {
+      return 'Tồn kho thấp';
+    }
     
     if (metadata.type === 'report_completed') {
       return 'Báo cáo';
