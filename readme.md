@@ -29,3 +29,7 @@ docker service ls
 
 ## kiểm tra balancing 
 docker logs <container_id>
+
+
+## tắt hản service
+docker service scale soa-stack_notification-service=0 

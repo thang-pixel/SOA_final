@@ -65,7 +65,7 @@ let rabbitChannel;
 
 
 // Kết nối RabbitMQ
-async function connectRabbitMQ() {
+async function connectRabbitMQ(retryCount = 0) {
   try {
     rabbitConnection = await amqp.connect(process.env.RABBITMQ_URL || 'amqp://localhost');
     rabbitChannel = await rabbitConnection.createChannel();
@@ -104,8 +104,14 @@ async function connectRabbitMQ() {
     
     console.log('Connected to RabbitMQ');
   } catch (error) {
-    console.error('Failed to connect to RabbitMQ:', error);
-  }
+      console.error('Failed to connect to RabbitMQ:', error);
+      // Tự động retry sau 5 giây, tối đa 20 lần
+      if (retryCount < 20) {
+        setTimeout(() => connectRabbitMQ(retryCount + 1), 5000);
+      } else {
+        console.error('RabbitMQ connection failed after multiple retries.');
+      }
+    }
 }
 
 // Gửi email đến nhà cung cấp

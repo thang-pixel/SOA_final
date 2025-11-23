@@ -83,6 +83,10 @@ services:
       - soa-network
     depends_on:
       - rabbitmq
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
 
 
   # Activity Service
@@ -104,12 +108,16 @@ services:
     ports:
       - "3006:3006"
     environment:
+      - EMAIL=tenk8595@gmail.com
+      - EMAIL_PASSWORD=nhsu elfh hewr cahq
       - PORT=3006
+      - RABBITMQ_URL=amqp://admin:admin123@rabbitmq:5672
       - MONGO_URI=${REPORT_MONGO_URI:-mongodb+srv://thang:123@cluster-soa-final.m1tinrp.mongodb.net/report-db}
     networks:
       - soa-network
     depends_on:
       - rabbitmq
+      - order-service
 
   # API Gateway
   api-gateway:
