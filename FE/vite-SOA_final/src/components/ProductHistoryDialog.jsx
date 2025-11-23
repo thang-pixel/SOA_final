@@ -231,24 +231,26 @@ const ProductHistoryDialog = ({ open, onClose, product }) => {
                           </Box>
                         }
                         secondary={
-                          <Box>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                              {log.description}
-                            </Typography>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              <Typography variant="caption" color="text.secondary">
-                                Bởi: <strong>{log.username}</strong>
+                          <Typography component="div" variant="body2">
+                            <Box>
+                              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                {log.description}
                               </Typography>
-                              {log.metadata?.quantity && (
-                                <Chip
-                                  size="small"
-                                  label={`SL: ${log.metadata.quantity}`}
-                                  variant="outlined"
-                                  color={config.color}
-                                />
-                              )}
-                            </Stack>
-                          </Box>
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <Typography variant="caption" color="text.secondary">
+                                  Bởi: <strong>{log.username}</strong>
+                                </Typography>
+                                {log.metadata?.quantity && (
+                                  <Chip
+                                    size="small"
+                                    label={`SL: ${log.metadata.quantity}`}
+                                    variant="outlined"
+                                    color={config.color}
+                                  />
+                                )}
+                              </Stack>
+                            </Box>
+                          </Typography>
                         }
                       />
                     </ListItem>

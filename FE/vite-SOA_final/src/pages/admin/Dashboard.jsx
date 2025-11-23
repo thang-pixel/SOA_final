@@ -75,25 +75,25 @@ function Dashboard() {
         Dashboard
       </Typography>
       <Grid container spacing={3}>
-        <Grid item xs={12} md={6} lg={3}>
+        <Grid size={{ xs: 12, md: 6, lg: 3 }}>
           <Paper sx={{ p: 2, bgcolor: '#e3f2fd' }}>
             <Typography variant="h6" color="primary">Tổng hoạt động hôm nay</Typography>
             <Typography variant="h4">{stats?.totalToday || 0}</Typography>
           </Paper>
         </Grid>
-        <Grid item xs={12} md={6} lg={3}>
+        <Grid size={{ xs: 12, md: 6, lg: 3 }}>
           <Paper sx={{ p: 2, bgcolor: '#f3e5f5' }}>
             <Typography variant="h6" color="secondary">Đăng nhập hôm nay</Typography>
             <Typography variant="h4">{stats?.loginToday || 0}</Typography>
           </Paper>
         </Grid>
-        <Grid item xs={12} md={6} lg={3}>
+        <Grid size={{ xs: 12, md: 6, lg: 3 }}>
           <Paper sx={{ p: 2, bgcolor: '#e8f5e9' }}>
             <Typography variant="h6" color="success.main">Nhập kho hôm nay</Typography>
             <Typography variant="h4">{stats?.importsToday || 0}</Typography>
           </Paper>
         </Grid>
-        <Grid item xs={12} md={6} lg={3}>
+        <Grid size={{ xs: 12, md: 6, lg: 3 }}>
           <Paper sx={{ p: 2, bgcolor: '#fff3e0' }}>
             <Typography variant="h6" color="warning.main">Xuất kho hôm nay</Typography>
             <Typography variant="h4">{stats?.exportsToday || 0}</Typography>

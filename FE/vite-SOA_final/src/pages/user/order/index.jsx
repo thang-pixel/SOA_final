@@ -475,7 +475,7 @@ function ImportOrder() {
 
       <Grid container spacing={3}>
         {/* Form thông tin */}
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <Paper sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" fontWeight={600} gutterBottom>
               Thông tin đơn hàng
@@ -591,7 +591,7 @@ function ImportOrder() {
         </Grid>
 
         {/* Bảng sản phẩm */}
-        <Grid item xs={12} md={8} >
+        <Grid size={{ xs: 12, md: 8 }}>
           <Paper sx={{ p: 0 }}>
             <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
               <Typography variant="h6" fontWeight={600}>

@@ -482,7 +482,7 @@ function ExportOrder() {
 
       <Grid container spacing={3}>
         {/* Form thông tin khách hàng */}
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <Paper sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" fontWeight={600} gutterBottom>
               Thông tin khách hàng
@@ -608,7 +608,7 @@ function ExportOrder() {
         </Grid>
 
         {/* Bảng sản phẩm */}
-        <Grid item xs={12} md={8}>
+        <Grid size={{ xs: 12, md: 8 }}>
           <Paper sx={{ p: 0 }}>
             <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
               <Typography variant="h6" fontWeight={600}>
@@ -735,7 +735,7 @@ function ExportOrder() {
             {/* Footer bảng với cảnh báo tồn kho */}
             <Box sx={{ p: 2, bgcolor: 'grey.50', borderTop: '1px solid', borderColor: 'divider' }}>
               <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <Typography variant="body2" color="text.secondary">
                     Tổng cộng: <strong>{summary.totalItems}</strong> sản phẩm, 
                     <strong> {summary.totalQuantity}</strong> số lượng
@@ -750,7 +750,7 @@ function ExportOrder() {
                     </Alert>
                   )}
                 </Grid>
-                <Grid item xs={12} sm={6} sx={{ textAlign: { sm: 'right' } }}>
+                <Grid size={{ xs: 12, sm: 6 }} sx={{ textAlign: { sm: 'right' } }}>
                   <Typography variant="h6" fontWeight={600} color="primary.main">
                     Thành tiền: {currentExportOrder.totalAmount.toLocaleString('vi-VN')}đ
                   </Typography>

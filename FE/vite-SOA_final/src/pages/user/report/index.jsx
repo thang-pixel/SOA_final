@@ -210,7 +210,7 @@ const ReportPage = () => {
       {/* Statistics Cards */}
       {stats?.overview && (
         <Grid container spacing={3} mb={3} >
-          <Grid item xs={12} md={3} size={3}>
+          <Grid size={{ xs: 12, md: 3 }}>
             <Card>
               <CardContent>
                 <Box display="flex" justifyContent="space-between" alignItems="center">
@@ -311,7 +311,7 @@ const ReportPage = () => {
         <>
           <Grid container spacing={3} mb={3}>
             {/* CỘT 1: BIỂU ĐỒ ĐƯỜNG (Chiếm 8 phần) */}
-            <Grid item xs={12} md={8} size={8}>
+            <Grid size={{ xs: 12, md: 8 }}>
               <Paper
                 elevation={2}
                 sx={{
@@ -398,7 +398,7 @@ const ReportPage = () => {
             </Grid>
 
             {/* CỘT 2: BIỂU ĐỒ TRÒN (Chiếm 4 phần) */}
-            <Grid item xs={12} md={4} size={4}>
+            <Grid size={{ xs: 12, md: 4 }}>
               <Paper
                 elevation={2}
                 sx={{

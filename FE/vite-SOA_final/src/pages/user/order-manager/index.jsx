@@ -157,7 +157,7 @@ const OrderDetailDialog = React.memo(({ open, onClose, order }) => {
       
       <DialogContent sx={{ pt: 2 }}>
         <Grid container spacing={2} mb={3}>
-          <Grid item xs={6}>
+          <Grid size={{ xs: 6 }}>
             <Typography variant="subtitle2" color="text.secondary">
               {order.type === 'import' ? 'Nhà cung cấp:' : 'Khách hàng:'}
             </Typography>
@@ -165,30 +165,30 @@ const OrderDetailDialog = React.memo(({ open, onClose, order }) => {
               {order.supplier || order.customerName || 'Khách lẻ'}
             </Typography>
           </Grid>
-          <Grid item xs={6}>
+          <Grid size={{ xs: 6 }}>
             <Typography variant="subtitle2" color="text.secondary">Trạng thái:</Typography>
             <OrderStatusChip status={order.status} />
           </Grid>
-          <Grid item xs={6}>
+          <Grid size={{ xs: 6 }}>
             <Typography variant="subtitle2" color="text.secondary">Tổng tiền:</Typography>
             <Typography variant="body1" fontWeight={600}>
               {order.totalAmount.toLocaleString('vi-VN')}đ
             </Typography>
           </Grid>
-          <Grid item xs={6}>
+          <Grid size={{ xs: 6 }}>
             <Typography variant="subtitle2" color="text.secondary">Tạo bởi:</Typography>
             <Typography variant="body1">{order.createdBy}</Typography>
           </Grid>
           {order.type === 'export' && order.paymentMethod && (
             <>
-              <Grid item xs={6}>
+              <Grid size={{ xs: 6 }}>
                 <Typography variant="subtitle2" color="text.secondary">Phương thức thanh toán:</Typography>
                 <Typography variant="body1">
                   {order.paymentMethod === 'cash' ? 'Tiền mặt' : 
                    order.paymentMethod === 'card' ? 'Thẻ' : 'Chuyển khoản'}
                 </Typography>
               </Grid>
-              <Grid item xs={6}>
+              <Grid size={{ xs: 6 }}>
                 <Typography variant="subtitle2" color="text.secondary">SĐT khách hàng:</Typography>
                 <Typography variant="body1">{order.customerPhone || 'Không có'}</Typography>
               </Grid>
@@ -651,8 +651,8 @@ function OrderManager() {
 
   // Render Table view
   const renderTableView = useCallback(() => (
-    <Paper sx={{ mb: 3 }}>
-      <TableContainer>
+    <Paper sx={{ mb: 3, minHeight: '400px', minWidth: '400px' }}>
+      <TableContainer sx={{ minHeight: '350px' }}>
         <Table>
           <TableHead>
             <TableRow>
@@ -784,9 +784,9 @@ function OrderManager() {
 
   // Render Cards view
   const renderCardsView = useCallback(() => (
-    <Grid container spacing={3}>
+    <Grid container spacing={3} >
       {filteredOrders.map((order) => (
-        <Grid item xs={12} md={6} lg={4} key={`${order.type}-${order._id}`}>
+        <Grid size={{ xs: 12, md: 6, lg: 4 }} key={`${order.type}-${order._id}`}>
           <Card
             sx={{
               border: orderCodeSearch && 
@@ -794,7 +794,11 @@ function OrderManager() {
                 ? '2px solid' : '1px solid',
               borderColor: orderCodeSearch && 
                 (order.orderCode || order.receiptCode || '').toLowerCase().includes(orderCodeSearch.toLowerCase())
-                ? 'primary.main' : 'divider'
+                ? 'primary.main' : 'divider',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column'
+              
             }}
           >
             <CardContent>
@@ -946,37 +950,37 @@ function OrderManager() {
 
       {/* Statistics Cards */}
       <Grid container spacing={2} mb={3}>
-        <Grid item xs={6} sm={4} md={2} size={2}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
           <Card sx={{ textAlign: 'center', p: 1 }}>
             <Typography variant="h5" fontWeight={600}>{statusStats.all}</Typography>
             <Typography variant="caption" color="text.secondary">Tổng đơn</Typography>
           </Card>
         </Grid>
-        <Grid item xs={6} sm={4} md={2} size={2}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
           <Card sx={{ textAlign: 'center', p: 1 }}>
             <Typography variant="h5" fontWeight={600} color="primary.main">{statusStats.import}</Typography>
             <Typography variant="caption" color="text.secondary">Nhập hàng</Typography>
           </Card>
         </Grid>
-        <Grid item xs={6} sm={4} md={2} size={2}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
           <Card sx={{ textAlign: 'center', p: 1 }}>
             <Typography variant="h5" fontWeight={600} color="success.main">{statusStats.export}</Typography>
             <Typography variant="caption" color="text.secondary">Xuất hàng</Typography>
           </Card>
         </Grid>
-        <Grid item xs={6} sm={4} md={2} size={2}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
           <Card sx={{ textAlign: 'center', p: 1 }}>
             <Typography variant="h5" fontWeight={600} color="warning.main">{statusStats.processing}</Typography>
             <Typography variant="caption" color="text.secondary">Đang xử lý</Typography>
           </Card>
         </Grid>
-        <Grid item xs={6} sm={4} md={2} size={2}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
           <Card sx={{ textAlign: 'center', p: 1 }}>
             <Typography variant="h5" fontWeight={600} color="info.main">{statusStats.delivered}</Typography>
             <Typography variant="caption" color="text.secondary">Đã giao</Typography>
           </Card>
         </Grid>
-        <Grid item xs={6} sm={4} md={2} size={2}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
           <Card sx={{ textAlign: 'center', p: 1 }}>
             <Typography variant="h5" fontWeight={600} color="success.main">{statusStats.completed}</Typography>
             <Typography variant="caption" color="text.secondary">Hoàn thành</Typography>
