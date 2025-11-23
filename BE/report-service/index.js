@@ -436,7 +436,7 @@ async function generatePDF(report, data) {
       // Footer
       doc.fontSize(10).text(`Ngày tạo: ${formatDate(new Date())}`, 50, doc.page.height - 70, { align: 'right' });
       doc.text(`Người tạo: ${report.createdBy}`, { align: 'right' });
-      doc.text('Báo cáo được tạo tự động bởi hệ thống', 50, doc.page.height - 40, { align: 'center' });
+      
       
       doc.end();
       

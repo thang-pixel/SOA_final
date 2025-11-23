@@ -1,6 +1,14 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchInventoryItems } from '../../../redux/action/inventory';
+import { useNavigate } from 'react-router-dom';
+
+// Components
+import ProductHistoryPopup from '../../../components/ProductHistoryPopup';
+import AddProductPopup from '../../../components/AddProductPopup';
+import NotificationSnackbar from '../../../components/NotificationSnackbar';
+import ConfirmDialog from '../../../components/ConfirmDialog';
+
+// Redux actions
 import { setSearchFilter, setStockFilter } from '../../../redux/reducers/inventorySlice';
 import { createImportOrder, createExportOrder } from '../../../redux/action/orderAction';
 import AddProductPopup from '../../../components/AddProductPopup';
@@ -24,12 +32,12 @@ import {
   CircularProgress,
   Alert,
   Stack,
-  Fade
+  Fade,
+  Tooltip
 } from '@mui/material';
-
-import { useNotification } from '../../../hooks/useNotification';
-import NotificationSnackbar from '../../../components/NotificationSnackbar';
 import { DataGrid } from '@mui/x-data-grid';
+
+// Icons
 import {
   Add as AddIcon,
   Search as SearchIcon,
@@ -42,7 +50,9 @@ import {
   Print as PrintIcon,
   Download as DownloadIcon,
   Business as BusinessIcon,
-  ShoppingCart as ShoppingCartIcon
+  ShoppingCart as ShoppingCartIcon,
+  Delete as DeleteIcon,
+  History as HistoryIcon
 } from '@mui/icons-material';
 
 // Memoized components for statistics cards
@@ -116,7 +126,7 @@ const PriceCell = React.memo(({ value, color = "text.primary" }) => (
   </Typography>
 ));
 
-const StockChip = React.memo(({ stock }) => {
+const StockChip = React.memo(({ stock, onClick, productInfo }) => {
   const { color, icon, variant } = useMemo(() => {
     if (stock === 0) {
       return { color: 'error', icon: <WarningIcon fontSize="small" />, variant: 'filled' };
@@ -127,13 +137,25 @@ const StockChip = React.memo(({ stock }) => {
   }, [stock]);
 
   return (
-    <Chip
-      icon={icon}
-      label={stock}
-      size="small"
-      color={color}
-      variant={variant}
-    />
+    <Tooltip title="Nhấp để xem lịch sử xuất nhập kho" placement="top">
+      <Chip
+        icon={icon}
+        label={stock}
+        size="small"
+        color={color}
+        variant={variant}
+        onClick={() => onClick && onClick(productInfo)}
+        sx={{
+          cursor: onClick ? 'pointer' : 'default',
+          transition: 'all 0.2s ease',
+          '&:hover': {
+            bgcolor: onClick ? `${color}.100` : 'inherit',
+            transform: onClick ? 'scale(1.05)' : 'none',
+            boxShadow: onClick ? 2 : 'none'
+          }
+        }}
+      />
+    </Tooltip>
   );
 });
 
@@ -165,7 +187,7 @@ const DateCell = React.memo(({ value }) => {
 });
 
 // Component hiển thị nút actions khi có selection
-const SelectionActions = React.memo(({ selectedCount, onExport, onPrintLabels, onImport }) => (
+const SelectionActions = React.memo(({ selectedCount, onExport, onPrintLabels, onImport, onDelete }) => (
   <Fade in={selectedCount > 0}>
     <Stack direction="row" spacing={2}>
       <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', mr: 1 }}>
@@ -173,28 +195,30 @@ const SelectionActions = React.memo(({ selectedCount, onExport, onPrintLabels, o
       </Typography>
       <Button
         variant="contained"
-        startIcon={<ShoppingCartIcon />}
+        startIcon={<ExportIcon />}
         onClick={onExport}
         sx={{ textTransform: 'none' }}
-        color="success"
+        color="warning"
       >
         Xuất hàng
       </Button>
       <Button
-        variant="outlined"
-        startIcon={<PrintIcon />}
-        onClick={onPrintLabels}
-        sx={{ textTransform: 'none' }}
-      >
-        In tem mã
-      </Button>
-      <Button
-        variant="outlined"
-        startIcon={<ImportIcon />}
+        variant="contained"
+        startIcon={<ShoppingCartIcon />}
         onClick={onImport}
         sx={{ textTransform: 'none' }}
+        color="success"
       >
         Nhập hàng
+      </Button>
+      <Button
+        variant="contained"
+        startIcon={<DeleteIcon />}
+        onClick={onDelete}
+        sx={{ textTransform: 'none' }}
+        color="error"
+      >
+        Xóa ({selectedCount})
       </Button>
     </Stack>
   </Fade>
@@ -232,7 +256,13 @@ const DefaultActions = React.memo(({ onAddNew, onImport, onExport }) => (
 
 function Inventory() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  
+  // Redux state
   const { items, loading, error, filters } = useSelector((state) => state.inventory);
+  const { user } = useSelector((state) => state.auth);
+  
+  // Local state
   const [openPopup, setOpenPopup] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [selectionModel, setSelectionModel] = useState([]);
@@ -240,7 +270,7 @@ function Inventory() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const navigate = useNavigate();
   
-  // Sử dụng notification hook
+  // Hooks
   const {
     notification,
     hideNotification,
@@ -250,6 +280,14 @@ function Inventory() {
     showInfo
   } = useNotification();
 
+  const {
+    confirmState,
+    showConfirm,
+    hideConfirm,
+    setLoading: setConfirmLoading
+  } = useConfirm();
+
+  // Load data on mount
   useEffect(() => {
     dispatch(fetchInventoryItems());
   }, [dispatch]);
@@ -273,7 +311,17 @@ function Inventory() {
     });
   }, [items, filters.search, filters.stockStatus]);
 
-  // Memoized handlers
+  // Memoized statistics
+  const statistics = useMemo(() => {
+    const totalStock = items.reduce((sum, item) => sum + item.stock, 0);
+    const totalValue = items.reduce((sum, item) => sum + (item.price * item.stock), 0);
+    const lowStockItems = items.filter(item => item.stock <= 10).length;
+    const outOfStockItems = items.filter(item => item.stock === 0).length;
+
+    return { totalStock, totalValue, lowStockItems, outOfStockItems };
+  }, [items]);
+
+  // Event handlers
   const handleSearch = useCallback((e) => {
     dispatch(setSearchFilter(e.target.value));
   }, [dispatch]);
@@ -284,11 +332,12 @@ function Inventory() {
 
   const handleAddSuccess = useCallback(() => {
     dispatch(fetchInventoryItems());
-  }, [dispatch]);
+    showSuccess('Sản phẩm đã được thêm/cập nhật thành công!');
+  }, [dispatch, showSuccess]);
 
   const handleRowClick = useCallback((params, event) => {
-    // Ngăn không cho mở popup khi click vào checkbox
-    if (event.target.type === 'checkbox') {
+    // Ngăn không cho mở popup khi click vào checkbox hoặc stock chip
+    if (event.target.type === 'checkbox' || event.target.closest('[data-testid="stock-chip"]')) {
       return;
     }
     setEditingItem(params.row);
@@ -309,7 +358,24 @@ function Inventory() {
     setSelectionModel(newSelection);
   }, []);
 
-  // Action handlers cho selection - XUẤT HÀNG
+  // Stock history popup handlers
+  const handleStockClick = useCallback((productInfo) => {
+    setHistoryPopup({
+      open: true,
+      productId: productInfo._id,
+      productInfo: productInfo
+    });
+  }, []);
+
+  const handleCloseHistoryPopup = useCallback(() => {
+    setHistoryPopup({ 
+      open: false, 
+      productId: null, 
+      productInfo: null 
+    });
+  }, []);
+
+  // Selection action handlers
   const handleExportSelected = useCallback(() => {
     const selectedItems = filteredItems.filter(item => selectionModel.includes(item._id));
     
@@ -323,15 +389,80 @@ function Inventory() {
     if (outOfStockItems.length > 0) {
       showError(
         `Không thể xuất hàng! Các sản phẩm sau đã hết hàng: ${outOfStockItems.map(item => item.name).join(', ')}`,
+        'Kiểm tra tồn kho',
         10000
       );
       return;
     }
     
     dispatch(createExportOrder(selectedItems));
-    
+    showSuccess(`Đã chọn ${selectedItems.length} sản phẩm để xuất hàng!`);
     navigate('/user/order-export');
-  }, [selectionModel, filteredItems, dispatch, navigate, showWarning, showError, showInfo]);
+  }, [selectionModel, filteredItems, dispatch, navigate, showWarning, showError, showSuccess]);
+
+  const handleImportSelected = useCallback(() => {
+    const selectedItems = filteredItems.filter(item => selectionModel.includes(item._id));
+    
+    if (selectedItems.length === 0) {
+      showWarning('Vui lòng chọn ít nhất một sản phẩm để nhập hàng');
+      return;
+    }
+    
+    dispatch(createImportOrder(selectedItems));
+    showSuccess(`Đã chọn ${selectedItems.length} sản phẩm để nhập hàng!`);
+    setTimeout(() => navigate('/user/order'), 1000);
+  }, [selectionModel, filteredItems, dispatch, navigate, showWarning, showSuccess]);
+
+  const handleDeleteSelected = useCallback(async () => {
+    const selectedItems = filteredItems.filter(item => selectionModel.includes(item._id));
+    
+    if (selectedItems.length === 0) {
+      showWarning('Vui lòng chọn ít nhất một sản phẩm để xóa');
+      return;
+    }
+
+    // Tạo danh sách tên sản phẩm để hiển thị trong confirm dialog
+    const productNames = selectedItems.length > 3 
+      ? `${selectedItems.slice(0, 3).map(item => item.name).join(', ')} và ${selectedItems.length - 3} sản phẩm khác`
+      : selectedItems.map(item => item.name).join(', ');
+
+    const confirmed = await showConfirm({
+      title: 'Xác nhận xóa sản phẩm',
+      message: `Bạn có chắc chắn muốn xóa ${selectedItems.length} sản phẩm sau?\n\n${productNames}\n\n⚠️ Hành động này không thể hoàn tác!`,
+      type: 'danger',
+      confirmText: `Xóa ${selectedItems.length} sản phẩm`,
+      cancelText: 'Hủy'
+    });
+
+    if (!confirmed) return;
+
+    try {
+      setConfirmLoading(true);
+      
+      const result = await dispatch(deleteMultipleProducts(
+        selectionModel,
+        user?.username || 'admin'
+      ));
+      
+      // Clear selection sau khi xóa
+      setSelectionModel([]);
+      
+      showSuccess(
+        `Đã xóa thành công ${result.deletedCount} sản phẩm!`,
+        'Xóa sản phẩm thành công',
+        5000
+      );
+      
+    } catch (error) {
+      showError(
+        `Lỗi khi xóa sản phẩm: ${error.message}`,
+        'Xóa thất bại',
+        8000
+      );
+    } finally {
+      setConfirmLoading(false);
+    }
+  }, [selectionModel, filteredItems, dispatch, user, showConfirm, showSuccess, showError, showWarning, setConfirmLoading]);
 
   const handlePrintLabels = useCallback(() => {
     const selectedItems = filteredItems.filter(item => selectionModel.includes(item._id));
@@ -343,20 +474,6 @@ function Inventory() {
     showInfo(`Đang chuẩn bị in tem mã cho ${selectedItems.length} sản phẩm...`);
     // TODO: Implement print labels functionality
   }, [selectionModel, filteredItems, showWarning, showInfo]);
-
-  // Action handlers cho selection - NHẬP HÀNG
-  const handleImportSelected = useCallback(() => {
-    const selectedItems = filteredItems.filter(item => selectionModel.includes(item._id));
-    
-    if (selectedItems.length === 0) {
-      showWarning('Vui lòng chọn ít nhất một sản phẩm để nhập hàng');
-      return;
-    }
-    
-    dispatch(createImportOrder(selectedItems));
-    showInfo(`Đã chọn ${selectedItems.length} sản phẩm để nhập hàng. Chuyển đến trang tạo đơn...`);
-    setTimeout(() => navigate('/user/order'), 1000);
-  }, [selectionModel, filteredItems, dispatch, navigate, showWarning, showInfo]);
 
   const handleImport = useCallback(() => {
     showInfo('Tính năng import file đang được phát triển');
@@ -481,20 +598,34 @@ function Inventory() {
       align: 'center',
       renderCell: (params) => <DateCell value={params.row.createdAt} />,
     },
-  ], []);
+  ], [handleStockClick]);
 
+  // Loading state
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
+        <Typography variant="body1" sx={{ ml: 2 }}>
+          Đang tải dữ liệu tồn kho...
+        </Typography>
       </Box>
     );
   }
 
+  // Error state
   if (error) {
     return (
       <Box p={3}>
-        <Alert severity="error">{error}</Alert>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+        <Button
+          variant="outlined"
+          onClick={() => dispatch(fetchInventoryItems())}
+          startIcon={<InventoryIcon />}
+        >
+          Thử lại
+        </Button>
       </Box>
     );
   }
@@ -517,6 +648,7 @@ function Inventory() {
             onExport={handleExportSelected}
             onPrintLabels={handlePrintLabels}
             onImport={handleImportSelected}
+            onDelete={handleDeleteSelected}
           />
         ) : (
           <DefaultActions
@@ -528,8 +660,8 @@ function Inventory() {
       </Box>
 
       {/* Statistics Cards */}
-      <Grid container spacing={3} mb={3} >
-        <Grid item xs={12} sm={6} md={3} size={3}>
+      <Grid container spacing={3} mb={3}>
+        <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Tổng sản phẩm"
             value={items.length}
@@ -537,7 +669,7 @@ function Inventory() {
           />
         </Grid>
         
-        <Grid item xs={12} sm={6} md={3} size={3}>
+        <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Tổng tồn kho"
             value={statistics.totalStock.toLocaleString()}
@@ -545,7 +677,7 @@ function Inventory() {
           />
         </Grid>
         
-        <Grid item xs={12} sm={6} md={3} size={3}>
+        <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Giá trị tồn kho"
             value={`${statistics.totalValue.toLocaleString('vi-VN')}đ`}
@@ -553,7 +685,7 @@ function Inventory() {
           />
         </Grid>
         
-        <Grid item xs={12} sm={6} md={3} size={3}>
+        <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Hết hàng"
             value={statistics.outOfStockItems}
@@ -597,10 +729,17 @@ function Inventory() {
             </FormControl>
           </Grid>
           
-          <Grid item xs={12} md={2}>
-            <Typography variant="body2" color="text.secondary">
-              Hiển thị: <strong>{filteredItems.length}</strong> sản phẩm
-            </Typography>
+          <Grid item xs={12} md={5}>
+            <Box display="flex" justifyContent="space-between" alignItems="center">
+              <Typography variant="body2" color="text.secondary">
+                Hiển thị: <strong>{filteredItems.length}</strong> / <strong>{items.length}</strong> sản phẩm
+              </Typography>
+              
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center' }}>
+                <HistoryIcon fontSize="small" sx={{ mr: 0.5 }} />
+                Nhấp vào số tồn kho để xem lịch sử
+              </Typography>
+            </Box>
           </Grid>
         </Grid>
       </Paper>
@@ -642,12 +781,20 @@ function Inventory() {
         />
       </Paper>
 
-      {/* Popup */}
+      {/* Add/Edit Product Popup */}
       <AddProductPopup
         isOpen={openPopup}
         onClose={handleClosePopup}
         onSuccess={handleAddSuccess}
         editItem={editingItem}
+      />
+
+      {/* Product History Popup */}
+      <ProductHistoryPopup
+        open={historyPopup.open}
+        onClose={handleCloseHistoryPopup}
+        productId={historyPopup.productId}
+        productInfo={historyPopup.productInfo}
       />
 
       {/* Notification Snackbar */}
@@ -657,6 +804,20 @@ function Inventory() {
         severity={notification.severity}
         autoHideDuration={notification.autoHideDuration}
         onClose={hideNotification}
+        title={notification.title}
+      />
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        open={confirmState.open}
+        onClose={hideConfirm}
+        onConfirm={confirmState.onConfirm}
+        title={confirmState.title}
+        message={confirmState.message}
+        type={confirmState.type}
+        confirmText={confirmState.confirmText}
+        cancelText={confirmState.cancelText}
+        loading={confirmState.loading}
       />
 
       {/* Product History Dialog */}
