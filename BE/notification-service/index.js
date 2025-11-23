@@ -177,7 +177,7 @@ async function sendOrderEmail(emailData) {
     
     const mailOptions = {
       from: process.env.EMAIL,
-      to: 'lehang.com86@gmail.com',
+      to: 'lunwatuanoi@gmail.com',
       subject: `Yêu cầu đặt hàng ${order.orderCode} - ABC Inventory`,
       html: htmlContent
     };
@@ -250,7 +250,7 @@ function startEmailMonitoring() {
                 if (err) return;
 
                 // Kiểm tra nếu email từ supplier
-                if (parsed.from.text.includes('lehang.com86@gmail.com')) {
+                if (parsed.from.text.includes('lunwatuanoi@gmail.com')) {
                   await createNotification({
                     title: 'Phản hồi từ nhà cung cấp',
                     message: `Nhà cung cấp đã phản hồi: ${parsed.subject}`,

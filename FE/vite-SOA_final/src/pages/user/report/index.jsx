@@ -53,7 +53,7 @@ const ReportPage = () => {
   const dispatch = useDispatch();
   const { reports, stats, loading, error } = useSelector(state => state.report);
   const { userInfo } = useSelector(state => state.user);
-  
+
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('day');
   const [formData, setFormData] = useState({
@@ -171,8 +171,8 @@ const ReportPage = () => {
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
       {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" fontWeight={600}>
-          <Assessment sx={{ mr: 1, verticalAlign: 'middle' }} />
+        <Typography variant="h4" fontWeight={600} color='black'>
+          <Assessment sx={{ mr: 1, verticalAlign: 'middle' }} color='primary' />
           Báo cáo & Phân tích
         </Typography>
         <Box display="flex" gap={2}>
@@ -209,8 +209,8 @@ const ReportPage = () => {
 
       {/* Statistics Cards */}
       {stats?.overview && (
-        <Grid container spacing={3} mb={3}>
-          <Grid item xs={12} md={3}>
+        <Grid container spacing={3} mb={3} >
+          <Grid item xs={12} md={3} size={3}>
             <Card>
               <CardContent>
                 <Box display="flex" justifyContent="space-between" alignItems="center">
@@ -234,7 +234,7 @@ const ReportPage = () => {
             </Card>
           </Grid>
 
-          <Grid item xs={12} md={3}>
+          <Grid item xs={12} md={3} size={3}>
             <Card>
               <CardContent>
                 <Box display="flex" justifyContent="space-between" alignItems="center">
@@ -255,7 +255,7 @@ const ReportPage = () => {
             </Card>
           </Grid>
 
-          <Grid item xs={12} md={3}>
+          <Grid item xs={12} md={3} size={3}>
             <Card>
               <CardContent>
                 <Box display="flex" justifyContent="space-between" alignItems="center">
@@ -276,7 +276,7 @@ const ReportPage = () => {
             </Card>
           </Grid>
 
-          <Grid item xs={12} md={3}>
+          <Grid item xs={12} md={3} size={3}>
             <Card>
               <CardContent>
                 <Box display="flex" justifyContent="space-between" alignItems="center">
@@ -308,83 +308,193 @@ const ReportPage = () => {
 
       {/* Charts */}
       {stats && (
-        <Grid container spacing={3} mb={3}>
-          <Grid item xs={12} md={8}>
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Biến động theo ngày
-              </Typography>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={stats.dailyStats}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="date" 
-                    tickFormatter={(date) => new Date(date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
-                  />
-                  <YAxis />
-                  <ChartTooltip 
-                    formatter={(value) => formatCurrency(value)}
-                    labelFormatter={(date) => new Date(date).toLocaleDateString('vi-VN')}
-                  />
-                  <Legend />
-                  <Line type="monotone" dataKey="importAmount" stroke="#8884d8" name="Nhập hàng" />
-                  <Line type="monotone" dataKey="exportAmount" stroke="#82ca9d" name="Xuất hàng" />
-                </LineChart>
-              </ResponsiveContainer>
-            </Paper>
-          </Grid>
+        <>
+          <Grid container spacing={3} mb={3}>
+            {/* CỘT 1: BIỂU ĐỒ ĐƯỜNG (Chiếm 8 phần) */}
+            <Grid item xs={12} md={8} size={8}>
+              <Paper
+                elevation={2}
+                sx={{
+                  p: 3,
+                  borderRadius: 2
+                }}
+              >
+                <Box mb={2}>
+                  <Typography variant="h6" fontWeight="bold" color="text.primary">
+                    Biến động doanh thu
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Thống kê nhập và xuất hàng theo ngày
+                  </Typography>
+                </Box>
 
-          <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Số lượng đơn hàng
-              </Typography>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={[
-                      { name: 'Nhập hàng', value: stats.overview?.totalImportOrders || 0 },
-                      { name: 'Xuất hàng', value: stats.overview?.totalExportOrders || 0 }
-                    ]}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={(entry) => `${entry.name}: ${entry.value}`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {[0, 1].map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <ChartTooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </Paper>
+
+
+                <ResponsiveContainer width="100%" height={350}>
+                  <LineChart data={stats.dailyStats} margin={{ top: 10, right: 40, left: 20, bottom: 10 }}>
+                    <defs>
+                      <linearGradient id="colorImport" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#8884d8" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#8884d8" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="colorExport" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#82ca9d" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#82ca9d" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" strokeOpacity={0.5} />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(date) => new Date(date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
+                      tick={{ fontSize: 13, fill: '#333', fontWeight: 500 }}
+                      stroke="#999"
+                      tickLine={{ stroke: '#ccc' }}
+                      dy={8}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 13, fill: '#333', fontWeight: 500 }}
+                      stroke="#999"
+                      tickLine={{ stroke: '#ccc' }}
+                      tickFormatter={(value) => `${(value / 1000000).toFixed(0)}M`}
+                    />
+                    <ChartTooltip
+                      contentStyle={{
+                        borderRadius: 10,
+                        border: '1px solid #ddd',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                        backgroundColor: 'rgba(255,255,255,0.98)'
+                      }}
+                      formatter={(value) => formatCurrency(value)}
+                      labelFormatter={(date) => new Date(date).toLocaleDateString('vi-VN')}
+                    />
+                    <Legend
+                      wrapperStyle={{ paddingTop: '15px' }}
+                      iconType="line"
+                      iconSize={20}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="importAmount"
+                      stroke="#8884d8"
+                      strokeWidth={4}
+                      dot={{ r: 5, fill: '#8884d8', strokeWidth: 2, stroke: '#fff' }}
+                      activeDot={{ r: 8, strokeWidth: 2, stroke: '#fff' }}
+                      name="Nhập hàng"
+                      fill="url(#colorImport)"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="exportAmount"
+                      stroke="#82ca9d"
+                      strokeWidth={4}
+                      dot={{ r: 5, fill: '#82ca9d', strokeWidth: 2, stroke: '#fff' }}
+                      activeDot={{ r: 8, strokeWidth: 2, stroke: '#fff' }}
+                      name="Xuất hàng"
+                      fill="url(#colorExport)"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </Paper>
+            </Grid>
+
+            {/* CỘT 2: BIỂU ĐỒ TRÒN (Chiếm 4 phần) */}
+            <Grid item xs={12} md={4} size={4}>
+              <Paper
+                elevation={2}
+                sx={{
+                  p: 3,
+                  borderRadius: 2
+                }}
+              >
+                <Box mb={2}>
+                  <Typography variant="h6" fontWeight="bold" color="text.primary">
+                    Tỷ lệ đơn hàng
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Phân bố nhập/xuất
+                  </Typography>
+                </Box>
+
+                <ResponsiveContainer width="100%" height={350}>
+                  <PieChart>
+                    <defs>
+                      <filter id="shadow" height="200%">
+                        <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.3" />
+                      </filter>
+                    </defs>
+                    <Pie
+                      data={[
+                        { name: 'Nhập hàng', value: stats.overview?.totalImportOrders || 0 },
+                        { name: 'Xuất hàng', value: stats.overview?.totalExportOrders || 0 }
+                      ]}
+                      cx="50%"
+                      cy="45%"
+                      innerRadius={70}
+                      outerRadius={100}
+                      paddingAngle={3}
+                      cornerRadius={8}
+                      dataKey="value"
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      labelLine={{
+                        stroke: '#999',
+                        strokeWidth: 1
+                      }}
+                      style={{ filter: 'url(#shadow)' }}
+                    >
+                      {[0, 1].map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                          stroke="#fff"
+                          strokeWidth={3}
+                        />
+                      ))}
+                    </Pie>
+                    <ChartTooltip
+                      contentStyle={{
+                        borderRadius: 10,
+                        border: '1px solid #ddd',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                        backgroundColor: 'rgba(255,255,255,0.98)',
+                        padding: '10px 15px'
+                      }}
+                      formatter={(value, name) => [`${value} đơn`, name]}
+                    />
+                    <Legend
+                      verticalAlign="bottom"
+                      iconType="circle"
+                      iconSize={12}
+                      wrapperStyle={{
+                        paddingTop: '20px',
+                        fontSize: '14px',
+                        fontWeight: 500
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Paper>
+            </Grid>
           </Grid>
 
           {/* Top Products */}
           {stats.topExportProducts && stats.topExportProducts.length > 0 && (
-            <Grid item xs={12}>
-              <Paper sx={{ p: 3 }}>
-                <Typography variant="h6" gutterBottom>
-                  Top 10 sản phẩm bán chạy
-                </Typography>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={stats.topExportProducts}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="productName" angle={-45} textAnchor="end" height={100} />
-                    <YAxis />
-                    <ChartTooltip />
-                    <Legend />
-                    <Bar dataKey="quantity" fill="#82ca9d" name="Số lượng" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Paper>
-            </Grid>
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Top 10 sản phẩm bán chạy
+              </Typography>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={stats.topExportProducts}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="productName" angle={-45} textAnchor="end" height={100} />
+                  <YAxis />
+                  <ChartTooltip />
+                  <Legend />
+                  <Bar dataKey="quantity" fill="#82ca9d" name="Số lượng" />
+                </BarChart>
+              </ResponsiveContainer>
+            </Paper>
           )}
-        </Grid>
+        </>
       )}
 
       {/* Reports Table */}

@@ -1,0 +1,153 @@
+version: '3.8'
+
+services:
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: soa-rabbitmq
+    ports:
+      - "5672:5672"      # AMQP port
+      - "15672:15672"    # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - soa-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Auth Service
+  auth-service:
+    build:
+      context: ./BE/auth-service
+      dockerfile: Dockerfile
+    container_name: soa-auth-service
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - MONGO_URI=${AUTH_MONGO_URI:-mongodb+srv://thang:123@cluster-soa-final.m1tinrp.mongodb.net/auth-db}
+      - JWT_SECRET=${JWT_SECRET:-tuanjwtsecret}
+    networks:
+      - soa-network
+    depends_on:
+      - rabbitmq
+    restart: unless-stopped
+
+  # Inventory Service
+  inventory-service:
+    build:
+      context: ./BE/inventory-service
+      dockerfile: Dockerfile
+    container_name: soa-inventory-service
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - MONGO_URI=${INVENTORY_MONGO_URI}
+    networks:
+      - soa-network
+    restart: unless-stopped
+
+  # Order Service
+  order-service:
+    build:
+      context: ./BE/order-service
+      dockerfile: Dockerfile
+    container_name: soa-order-service
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - MONGO_URI=${ORDER_MONGO_URI}
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    networks:
+      - soa-network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Notification Service
+  notification-service:
+    build:
+      context: ./BE/notification-service
+      dockerfile: Dockerfile
+    container_name: soa-notification-service
+    ports:
+      - "3004:3004"
+    environment:
+      - PORT=3004
+      - MONGO_URI=${NOTIFICATION_MONGO_URI}
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - EMAIL=tenk8595@gmail.com
+      - EMAIL_PASSWORD=nhsu elfh hewr cahq
+    networks:
+      - soa-network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Activity Service
+  activity-service:
+    build:
+      context: ./BE/activity-service
+      dockerfile: Dockerfile
+    container_name: soa-activity-service
+    ports:
+      - "3005:3005"
+    environment:
+      - PORT=3005
+      - MONGO_URI=${ACTIVITY_MONGO_URI:-mongodb+srv://thang:123@cluster-soa-final.m1tinrp.mongodb.net/activity-db}
+    networks:
+      - soa-network
+    restart: unless-stopped
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./BE/api-gateway
+      dockerfile: Dockerfile
+    container_name: soa-api-gateway
+    ports:
+      - "2000:2000"
+    environment:
+      - PORT=2000
+    networks:
+      - soa-network
+    depends_on:
+      - auth-service
+      - inventory-service
+      - order-service
+      - notification-service
+      - activity-service
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: ./FE/vite-SOA_final
+      dockerfile: Dockerfile
+    container_name: soa-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:3000
+    networks:
+      - soa-network
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+
+networks:
+  soa-network:
+    driver: bridge
+
+volumes:
+  rabbitmq_data:
