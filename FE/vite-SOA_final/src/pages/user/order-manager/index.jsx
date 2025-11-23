@@ -946,37 +946,37 @@ function OrderManager() {
 
       {/* Statistics Cards */}
       <Grid container spacing={2} mb={3}>
-        <Grid item xs={6} sm={4} md={2}>
+        <Grid item xs={6} sm={4} md={2} size={2}>
           <Card sx={{ textAlign: 'center', p: 1 }}>
             <Typography variant="h5" fontWeight={600}>{statusStats.all}</Typography>
             <Typography variant="caption" color="text.secondary">Tổng đơn</Typography>
           </Card>
         </Grid>
-        <Grid item xs={6} sm={4} md={2}>
+        <Grid item xs={6} sm={4} md={2} size={2}>
           <Card sx={{ textAlign: 'center', p: 1 }}>
             <Typography variant="h5" fontWeight={600} color="primary.main">{statusStats.import}</Typography>
             <Typography variant="caption" color="text.secondary">Nhập hàng</Typography>
           </Card>
         </Grid>
-        <Grid item xs={6} sm={4} md={2}>
+        <Grid item xs={6} sm={4} md={2} size={2}>
           <Card sx={{ textAlign: 'center', p: 1 }}>
             <Typography variant="h5" fontWeight={600} color="success.main">{statusStats.export}</Typography>
             <Typography variant="caption" color="text.secondary">Xuất hàng</Typography>
           </Card>
         </Grid>
-        <Grid item xs={6} sm={4} md={2}>
+        <Grid item xs={6} sm={4} md={2} size={2}>
           <Card sx={{ textAlign: 'center', p: 1 }}>
             <Typography variant="h5" fontWeight={600} color="warning.main">{statusStats.processing}</Typography>
             <Typography variant="caption" color="text.secondary">Đang xử lý</Typography>
           </Card>
         </Grid>
-        <Grid item xs={6} sm={4} md={2}>
+        <Grid item xs={6} sm={4} md={2} size={2}>
           <Card sx={{ textAlign: 'center', p: 1 }}>
             <Typography variant="h5" fontWeight={600} color="info.main">{statusStats.delivered}</Typography>
             <Typography variant="caption" color="text.secondary">Đã giao</Typography>
           </Card>
         </Grid>
-        <Grid item xs={6} sm={4} md={2}>
+        <Grid item xs={6} sm={4} md={2} size={2}>
           <Card sx={{ textAlign: 'center', p: 1 }}>
             <Typography variant="h5" fontWeight={600} color="success.main">{statusStats.completed}</Typography>
             <Typography variant="caption" color="text.secondary">Hoàn thành</Typography>

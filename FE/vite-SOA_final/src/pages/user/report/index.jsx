@@ -171,8 +171,8 @@ const ReportPage = () => {
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
       {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" fontWeight={600}>
-          <Assessment sx={{ mr: 1, verticalAlign: 'middle' }} />
+        <Typography variant="h4" fontWeight={600} color='black'>
+          <Assessment sx={{ mr: 1, verticalAlign: 'middle' }} color='primary' />
           Báo cáo & Phân tích
         </Typography>
         <Box display="flex" gap={2}>
