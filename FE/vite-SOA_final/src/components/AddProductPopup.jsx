@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSelector } from 'react-redux';
 import axios from 'axios';
 import API_DOMAIN from '../constants/apiDomain';
 import {
@@ -104,6 +105,8 @@ const ProfitDisplay = React.memo(({ profit }) => {
 });
 
 const AddProductPopup = React.memo(({ isOpen, onClose, onSuccess, editItem }) => {
+  const user = useSelector((state) => state.auth.user);
+  
   const [formData, setFormData] = useState({
     code: '',
     name: '',
@@ -233,10 +236,16 @@ const AddProductPopup = React.memo(({ isOpen, onClose, onSuccess, editItem }) =>
 
     try {
       if (isEditMode) {
-        await axios.put(`${API_DOMAIN}/api/inventory/product/update/${editItem._id}`, formData);
+        await axios.put(`${API_DOMAIN}/api/inventory/product/update/${editItem._id}`, {
+          ...formData,
+          updatedBy: user?.username || 'admin'
+        });
         setSnackbar({ open: true, message: 'Cập nhật sản phẩm thành công!', severity: 'success' });
       } else {
-        await axios.post(`${API_DOMAIN}/api/inventory/product/add`, formData);
+        await axios.post(`${API_DOMAIN}/api/inventory/product/add`, {
+          ...formData,
+          createdBy: user?.username || 'admin'
+        });
         setSnackbar({ open: true, message: 'Thêm sản phẩm thành công!', severity: 'success' });
       }
       setTimeout(() => {

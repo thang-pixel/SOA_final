@@ -591,7 +591,7 @@ function ImportOrder() {
         </Grid>
 
         {/* Bảng sản phẩm */}
-        <Grid item xs={12} md={8}>
+        <Grid item xs={12} md={8} >
           <Paper sx={{ p: 0 }}>
             <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
               <Typography variant="h6" fontWeight={600}>
