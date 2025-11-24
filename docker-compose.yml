@@ -37,10 +37,12 @@ services:
   # Inventory Service
   inventory-service:
     image: inventory-service:latest
-
+    volumes:
+      - shared-images:/app/public/img
     ports:
       - "3002:3002"
     environment:
+      - NODE_ENV=production
       - PORT=3002
       - MONGO_URI=${INVENTORY_MONGO_URI:-mongodb+srv://thang:123@cluster-soa-final.m1tinrp.mongodb.net/inventory-db}
     networks:
@@ -140,7 +142,8 @@ services:
   # Frontend
   frontend:
     image: frontend:latest
-
+    volumes:
+      - shared-images:/app/public/img
     ports:
       - "5173:5173"
     environment:
@@ -157,4 +160,6 @@ networks:
 
 volumes:
   rabbitmq_data:
+    driver: local
+  shared-images:
     driver: local

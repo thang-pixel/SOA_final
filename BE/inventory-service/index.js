@@ -8,8 +8,14 @@ const app = express();
 const fs = require('fs');
 const multer = require('multer');
 const path = require('path');
+
+// Sử dụng đường dẫn tuyệt đối trong container
+const IMG_DIR = process.env.NODE_ENV === 'production' 
+  ? '/app/public/img' 
+  : path.join(__dirname, '../../FE/vite-SOA_final/public/img');
+
 const upload = multer({
-  dest: path.join(__dirname, '../../FE/vite-SOA_final/public/img')
+  dest: IMG_DIR
 });
 
 app.use(express.json());
@@ -101,8 +107,7 @@ app.post('/upload-img', upload.single('file'), (req, res) => {
 
 //API trả về ảnh
 app.get('/img', (req, res) => {
-  const imgDir = path.join(__dirname, '../../FE/vite-SOA_final/public/img');
-  fs.readdir(imgDir, (err, files) => {
+  fs.readdir(IMG_DIR, (err, files) => {
     if (err) return res.status(500).json([]);
     res.json(files.filter(f => /\.(jpg|jpeg|png|jfif)$/i.test(f)));
   });
