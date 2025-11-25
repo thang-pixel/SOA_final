@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useSelector, useDispatch } from 'react-redux';
 import {
   AppBar,
   Toolbar,
@@ -19,6 +20,7 @@ import {
   Divider,
   useMediaQuery,
   useTheme,
+  Chip,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -28,10 +30,10 @@ import {
   Notifications as NotificationsIcon,
   AccountCircle as AccountIcon,
   Close as CloseIcon,
+  AdminPanelSettings as AdminIcon,
 } from '@mui/icons-material';
-import { useDispatch } from 'react-redux';
 import { logOut } from '../redux/action/authAction';
-import NotificationDropdown from './notification'; // Import component mới
+import NotificationDropdown from './notification';
 
 // Danh sách menu items cho các service
 const menuItems = [
@@ -53,12 +55,6 @@ const menuItems = [
     path: '/reports',
     description: 'Báo cáo tồn kho, dự đoán nhu cầu'
   },
-  {
-    text: 'Thông báo',
-    icon: <NotificationsIcon />,
-    path: '/notifications',
-    description: 'Cảnh báo hết hàng, hết hạn'
-  },
 ];
 
 function Navbar() {
@@ -67,6 +63,7 @@ function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
+  const { user } = useSelector((state) => state.auth);
   
   // State quản lý menu
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -90,6 +87,8 @@ function Navbar() {
   // Xử lý logout
   const handleLogout = () => {
     handleClose();
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     dispatch(logOut());
     navigate('/login');
   };
@@ -120,6 +119,33 @@ function Navbar() {
           <CloseIcon />
         </IconButton>
       </Box>
+      
+      <Divider />
+      
+      {/* Hiển thị role và nút chuyển đổi cho admin */}
+      {user && (
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+            <Chip 
+              label={user.role === 'admin' ? 'Quản trị viên' : 'Nhân viên'}
+              color={user.role === 'admin' ? 'error' : 'primary'}
+              size="small"
+            />
+          </Box>
+          
+          {user.role === 'admin' && (
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<AdminIcon />}
+              onClick={() => handleNavigation('/admin/dashboard')}
+              sx={{ mb: 2 }}
+            >
+              Chế độ quản trị
+            </Button>
+          )}
+        </Box>
+      )}
       
       <Divider />
       
@@ -176,7 +202,7 @@ function Navbar() {
         }}
       >
         <Toolbar sx={{ justifyContent: 'space-between',
-            minHeight: { xs: 70, sm: 90 }, // Navbar cao hơn
+            minHeight: { xs: 70, sm: 90 },
          }}>
           {/* Logo và tiêu đề */}
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -209,7 +235,32 @@ function Navbar() {
           </Box>
           
           {/* Menu điều hướng cho desktop */}
-          <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1 }}>
+          <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1, alignItems: 'center' }}>
+            {/* Hiển thị nút chuyển đổi cho admin */}
+            {user && user.role === 'admin' && (
+              <Button
+                startIcon={<AdminIcon />}
+                onClick={() => navigate('/admin/dashboard')}
+                variant="outlined"
+                size="small"
+                sx={{
+                  textTransform: 'none',
+                  borderRadius: 2,
+                  px: 2,
+                  py: 1,
+                  mr: 2,
+                  color: 'error.main',
+                  borderColor: 'error.main',
+                  '&:hover': {
+                    backgroundColor: 'error.light' + '20',
+                    borderColor: 'error.dark'
+                  }
+                }}
+              >
+                Chế độ quản trị
+              </Button>
+            )}
+            
             {menuItems.map((item) => (
               <Button
                 key={item.text}
@@ -236,9 +287,19 @@ function Navbar() {
             ))}
           </Box>
           
-          {/* Phần bên phải: Thông báo và Avatar */}
+          {/* Phần bên phải: Role badge, Thông báo và Avatar */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {/* Component thông báo mới */}
+            {/* Hiển thị role badge */}
+            {user && (
+              <Chip 
+                label={user.role === 'admin' ? 'Admin' : 'User'}
+                color={user.role === 'admin' ? 'error' : 'primary'}
+                size="small"
+                sx={{ display: { xs: 'none', sm: 'flex' } }}
+              />
+            )}
+            
+            {/* Component thông báo */}
             <NotificationDropdown />
             
             {/* Avatar và menu người dùng */}
@@ -251,7 +312,7 @@ function Navbar() {
               color="inherit"
             >
               <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
-                U
+                {user?.name?.charAt(0).toUpperCase() || 'U'}
               </Avatar>
             </IconButton>
             
@@ -275,6 +336,12 @@ function Navbar() {
                 <AccountIcon sx={{ mr: 1 }} />
                 Thông tin tài khoản
               </MenuItem>
+              {user && user.role === 'admin' && (
+                <MenuItem onClick={() => { handleClose(); navigate('/admin/dashboard'); }}>
+                  <AdminIcon sx={{ mr: 1 }} />
+                  Chế độ quản trị
+                </MenuItem>
+              )}
               <Divider />
               <MenuItem onClick={handleLogout}>
                 Đăng xuất
@@ -290,7 +357,7 @@ function Navbar() {
         open={mobileOpen}
         onClose={handleDrawerToggle}
         ModalProps={{
-          keepMounted: true, // Better performance on mobile
+          keepMounted: true,
         }}
         sx={{
           display: { xs: 'block', md: 'none' },

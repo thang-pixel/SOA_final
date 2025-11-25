@@ -482,10 +482,10 @@ const ReportPage = () => {
               <Typography variant="h6" gutterBottom>
                 Top 10 sản phẩm bán chạy
               </Typography>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={500}>
                 <BarChart data={stats.topExportProducts}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="productName" angle={-45} textAnchor="end" height={100} />
+                  <XAxis dataKey="productName" angle={-45} textAnchor="end" height={300} />
                   <YAxis />
                   <ChartTooltip />
                   <Legend />

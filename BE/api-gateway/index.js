@@ -13,7 +13,7 @@ app.use(cors({
 
 // Proxy cho auth-service
 app.use('/api/auth', createProxyMiddleware({
-  target: 'http://auth-service:3001',
+  target: 'http://localhost:3001',
   changeOrigin: true,
   pathRewrite: {
     '^/api/auth': '',
@@ -22,7 +22,7 @@ app.use('/api/auth', createProxyMiddleware({
 
 // Proxy cho inventory-service
 app.use('/api/inventory', createProxyMiddleware({
-  target: 'http://inventory-service:3002',
+  target: 'http://localhost:3002',
   changeOrigin: true,
   pathRewrite: {
     '^/api/inventory': '',
@@ -31,7 +31,7 @@ app.use('/api/inventory', createProxyMiddleware({
 
 // Proxy cho order-service
 app.use('/api/order', createProxyMiddleware({
-  target: 'http://order-service:3003',
+  target: 'http://localhost:3003',
   changeOrigin: true,
   pathRewrite: {
     '^/api/order': '',
@@ -40,7 +40,7 @@ app.use('/api/order', createProxyMiddleware({
 
 // Proxy cho notification-service 
 app.use('/api/notification', createProxyMiddleware({
-  target: 'http://notification-service:3004',
+  target: 'http://localhost:3004',
   changeOrigin: true,
   pathRewrite: {
     '^/api/notification': '',
@@ -49,7 +49,7 @@ app.use('/api/notification', createProxyMiddleware({
 
 // Proxy cho activity-service
 app.use('/api/activity', createProxyMiddleware({
-  target: 'http://activity-service:3005',
+  target: 'http://localhost:3005',
   changeOrigin: true,
   pathRewrite: {
     '^/api/activity': '',
@@ -59,7 +59,7 @@ app.use('/api/activity', createProxyMiddleware({
 
 // Proxy cho report-service
 app.use('/api/report', createProxyMiddleware({
-  target: 'http://report-service:3006',
+  target: 'http://localhost:3006',
   changeOrigin: true,
   pathRewrite: {
     '^/api/report': '',

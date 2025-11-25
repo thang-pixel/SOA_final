@@ -45,11 +45,7 @@ const drawerClosedWidth = 65;
 const menuItems = [
   { text: 'Trang chủ', icon: <DashboardIcon />, path: '/admin/dashboard' },
   { text: 'Quản lý tài khoản', icon: <AccountCircleIcon />, path: '/admin/accounts' },
-  { text: 'Sản phẩm tồn kho', icon: <InventoryIcon />, path: '/admin/inventory' },
-  { text: 'Nhập kho', icon: <AddIcon />, path: '/admin/import' },
-  { text: 'Xuất kho', icon: <RemoveIcon />, path: '/admin/export' },
-  { text: 'Báo cáo', icon: <AssessmentIcon />, path: '/admin/reports' },
-  { text: 'Cài đặt', icon: <SettingsIcon />, path: '/admin/settings' },
+
 ];
 
 
@@ -194,12 +190,7 @@ function AdminLayout() {
             {getPageTitle()}
           </Typography>
           
-          {/* Icon thông báo */}
-          <IconButton color="inherit" sx={{ mr: 1 }}>
-            <Badge badgeContent={0} color="error">
-              <NotificationsIcon />
-            </Badge>
-          </IconButton>
+          
           
           {/* Avatar và menu người dùng */}
           <IconButton
@@ -227,8 +218,8 @@ function AdminLayout() {
             open={Boolean(anchorEl)}
             onClose={handleClose}
           >
-            <MenuItem onClick={() => { handleClose(); navigate('/admin/profile'); }}>
-              Thông tin tài khoản
+            <MenuItem onClick={() => { handleClose(); navigate('/inventory'); }}>
+              Chế độ nhân viên
             </MenuItem>
             <MenuItem onClick={handleLogout}>Đăng xuất</MenuItem>
           </Menu>
