@@ -28,7 +28,7 @@ function Login() {
             localStorage.setItem('token', response.token);
             localStorage.setItem('user', JSON.stringify({ username, role: response.role }));
             if (response.role === 'user') {
-                navigate('/home');
+                navigate('/inventory');
             }
             else{
                 navigate('/admin/dashboard');
@@ -100,15 +100,7 @@ function Login() {
                             {message}
                         </Alert>
                     )}
-                    <Button
-                        fullWidth
-                        variant="text"
-                        color="secondary"
-                        sx={{ mt: 2 }}
-                        onClick={() => navigate('/register')}
-                    >
-                        Chưa có tài khoản? Đăng ký
-                    </Button>
+                    
                 </Box>
 
             </Box>

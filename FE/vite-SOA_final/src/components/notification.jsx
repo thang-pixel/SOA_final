@@ -101,10 +101,17 @@ const NotificationDropdown = () => {
       return;
     }
 
+    if (notification.metadata?.supplierEmail && notification.relatedOrderId) {
+      handleClose();
+      navigate(`/order?filter=import&search=${notification.relatedOrderId}`);
+      console.log('ahhahaNavigating to order with supplier email:', notification.metadata.supplierEmail + ' and order ID:', notification.relatedOrderId);
+      return;
+    }
+
     // Navigate based on notification type
     if (notification.metadata) {
       const { type, receiptCode, orderCode } = notification.metadata;
-      
+      console.log('Notification metadata:', notification.metadata);
       if (type === 'export' && receiptCode) {
         handleClose();
         navigate(`/order?filter=export&search=${receiptCode}`);
@@ -113,8 +120,14 @@ const NotificationDropdown = () => {
         navigate(`/order?filter=import&search=${orderCode}`);
       }
     }
+
+    if (notification.relatedOrderId) {
+      handleClose();
+      navigate(`/order?filter=import&search=${notification.relatedOrderId}`);
+    }
   };
 
+    
   const handleMarkAllRead = () => {
     dispatch(markAllNotificationsAsRead());
   };

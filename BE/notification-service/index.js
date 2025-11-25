@@ -183,7 +183,7 @@ async function sendOrderEmail(emailData) {
     
     const mailOptions = {
       from: process.env.EMAIL,
-      to: 'lehang.com86@gmail.com',
+      to: 'phannguyenquocthang311205@gmail.com',
       subject: `Yêu cầu đặt hàng ${order.orderCode} - ABC Inventory`,
       html: htmlContent
     };
@@ -224,61 +224,151 @@ async function createNotification(data) {
 }
 
 // Check email định kỳ
+// Check email định kỳ
 function startEmailMonitoring() {
-  const imap = new Imap(imapConfig);
+  let isChecking = false;
+  let imap = null;
   
-  function openInbox(cb) {
-    imap.openBox('INBOX', false, cb);
+  function cleanup() {
+    if (imap) {
+      imap.removeAllListeners();
+      if (imap.state !== 'disconnected') {
+        imap.end();
+      }
+      imap = null;
+    }
   }
   
   function checkEmails() {
+    if (isChecking) {
+      console.log('Already checking emails, skipping...');
+      return;
+    }
+    
+    isChecking = true;
+    cleanup(); // Cleanup trước khi tạo connection mới
+    
+    imap = new Imap(imapConfig);
+    
+    // Set max listeners để tránh warning
+    imap.setMaxListeners(20);
+    
+    function openInbox(cb) {
+      imap.openBox('INBOX', false, cb);
+    }
+    
     imap.once('ready', function() {
       openInbox(function(err, box) {
         if (err) {
           console.error('Error opening inbox:', err);
+          cleanup();
+          isChecking = false;
           return;
         }
         
-        // Tìm email mới trong 1 phút qua
+        // Tìm email mới trong 5 phút qua (tăng thời gian để tránh lặp)
         const since = new Date();
-        since.setMinutes(since.getMinutes() - 1);
+        since.setMinutes(since.getMinutes() - 5);
         
-        imap.search(['UNSEEN', ['SINCE', since]], function(err, results) {
-          if (err || !results || results.length === 0) {
-            imap.end();
+        // Chỉ tìm email chưa đọc từ supplier cụ thể
+        imap.search([
+          'UNSEEN', 
+          ['SINCE', since],
+          ['FROM', 'phannguyenquocthang311205@gmail.com']
+        ], function(err, results) {
+          if (err) {
+            console.error('Search error:', err);
+            cleanup();
+            isChecking = false;
             return;
           }
           
-          const f = imap.fetch(results, { bodies: '' });
+          if (!results || results.length === 0) {
+            cleanup();
+            isChecking = false;
+            return;
+          }
+          
+          console.log(`Found ${results.length} new emails from supplier`);
+          
+          const f = imap.fetch(results, { 
+            bodies: '',
+            markSeen: true // Tự động đánh dấu đã đọc
+          });
+          
+          let processed = 0;
+          
           f.on('message', function(msg, seqno) {
             msg.on('body', function(stream, info) {
               simpleParser(stream, async (err, parsed) => {
-                if (err) return;
-
-                // Kiểm tra nếu email từ supplier
-                if (parsed.from.text.includes('lehang.com86@gmail.com')) {
-                  await createNotification({
-                    title: 'Phản hồi từ nhà cung cấp',
-                    message: `Nhà cung cấp đã phản hồi: ${parsed.subject}`,
-                    type: 'info',
-                    metadata: { 
-                      subject: parsed.subject,
-                      from: parsed.from.text,
-                      snippet: parsed.text ? parsed.text.substring(0, 100) + '...' : ''
-                    }
-                  });
-
-                  // Đánh dấu email đã đọc để không bị lặp lại lần sau
-                  imap.addFlags(seqno, '\\Seen', (err) => {
-                    if (err) console.error('Error marking email as seen:', err);
-                  });
+                if (err) {
+                  console.error('Parse error:', err);
+                  return;
                 }
+
+                try {
+                  // Kiểm tra xem notification này đã tồn tại chưa để tránh duplicate
+                  const existingNotification = await Notification.findOne({
+                    'metadata.subject': parsed.subject,
+                    'metadata.from': parsed.from.text,
+                    createdAt: { $gte: since }
+                  });
+                  
+                  if (!existingNotification) {
+                    // Extract order code từ subject hoặc nội dung email
+                    const extractOrderCode = (subject, text) => {
+                      // Tìm mã NHxxxxxxxxxxxxx trong subject hoặc text
+                      const pattern = /NH\d{13,}/;
+                      const match = (subject || '').match(pattern) || (text || '').match(pattern);
+                      if (match) {
+                        return match[0]; // Trả về mã đơn hàng, ví dụ: NH1764061832856
+                      }
+                      return null;
+                    };
+
+                    const orderCode = extractOrderCode(parsed.subject, parsed.text);
+                    
+                    await createNotification({
+                      title: 'Phản hồi từ nhà cung cấp',
+                      message: `Nhà cung cấp đã phản hồi: ${parsed.subject}`,
+                      type: 'info',
+                      relatedOrderId: orderCode, // Thêm orderCode vào đây
+                      metadata: { 
+                        subject: parsed.subject,
+                        from: parsed.from.text,
+                        snippet: parsed.text ? parsed.text.substring(0, 100) + '...' : '',
+                        emailId: `${parsed.messageId || seqno}_${Date.now()}`,
+                        orderCode: orderCode, // Lưu orderCode trong metadata
+                        supplierEmail: true // Đánh dấu đây là email từ supplier
+                      }
+                    });
+                    console.log('New notification created for email:', parsed.subject, 'OrderCode:', orderCode);
+                  } else {
+                    console.log('Duplicate email notification skipped:', parsed.subject);
+                  }
+                } catch (error) {
+                  console.error('Error processing email:', error);
+                }
+                
+                processed++;
               });
+            });
+            
+            msg.once('end', function() {
+              console.log(`Processed email ${processed}/${results.length}`);
             });
           });
           
+          f.once('error', function(err) {
+            console.error('Fetch error:', err);
+            cleanup();
+            isChecking = false;
+          });
+          
           f.once('end', function() {
-            imap.end();
+            console.log('Finished processing all emails');
+            cleanup();
+            isChecking = false;
           });
         });
       });
@@ -286,16 +376,45 @@ function startEmailMonitoring() {
     
     imap.once('error', function(err) {
       console.error('IMAP error:', err);
+      cleanup();
+      isChecking = false;
     });
     
-    imap.connect();
+    imap.once('end', function() {
+      console.log('IMAP connection ended');
+      isChecking = false;
+    });
+    
+    try {
+      imap.connect();
+    } catch (error) {
+      console.error('IMAP connect error:', error);
+      cleanup();
+      isChecking = false;
+    }
   }
   
-  // Check email mỗi 60 giây
-  setInterval(checkEmails, 60000);
-  console.log('Email monitoring started');
+  // Check email mỗi 30 giây (tăng interval để giảm tải)
+  const emailInterval = setInterval(() => {
+    checkEmails();
+  }, 5000);
+  
+  
+  // Cleanup khi process kết thúc
+  process.on('SIGINT', () => {
+    console.log('Cleaning up email monitoring...');
+    clearInterval(emailInterval);
+    cleanup();
+    process.exit(0);
+  });
+  
+  process.on('SIGTERM', () => {
+    console.log('Cleaning up email monitoring...');
+    clearInterval(emailInterval);
+    cleanup();
+    process.exit(0);
+  });
 }
-
 // API endpoints
 
 // Lấy danh sách notifications

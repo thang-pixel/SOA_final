@@ -269,22 +269,7 @@ const SelectionActions = React.memo(({ selectedCount, onExport, onPrintLabels, o
 // Component hiển thị nút actions mặc định
 const DefaultActions = React.memo(({ onAddNew, onImport, onExport }) => (
   <Stack direction="row" spacing={2}>
-    <Button
-      variant="outlined"
-      startIcon={<ImportIcon />}
-      onClick={onImport}
-      sx={{ textTransform: 'none' }}
-    >
-      Import file
-    </Button>
-    <Button
-      variant="outlined"
-      startIcon={<ExportIcon />}
-      onClick={onExport}
-      sx={{ textTransform: 'none' }}
-    >
-      Xuất file
-    </Button>
+    
     <Button
       variant="contained"
       startIcon={<AddIcon />}
@@ -483,7 +468,7 @@ function Inventory() {
     }
     
     dispatch(createExportOrder(selectedItems));
-    showSuccess(`Đã chọn ${selectedItems.length} sản phẩm để xuất hàng!`);
+
     navigate('/user/order-export');
   }, [selectionModel, filteredItems, dispatch, navigate, showWarning, showError, showSuccess]);
 
@@ -496,8 +481,8 @@ function Inventory() {
     }
     
     dispatch(createImportOrder(selectedItems));
-    showSuccess(`Đã chọn ${selectedItems.length} sản phẩm để nhập hàng!`);
-    setTimeout(() => navigate('/user/order'), 1000);
+
+    navigate('/user/order');
   }, [selectionModel, filteredItems, dispatch, navigate, showWarning, showSuccess]);
 
   const handleDeleteSelected = useCallback(async () => {

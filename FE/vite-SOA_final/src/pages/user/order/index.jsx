@@ -429,15 +429,7 @@ function ImportOrder() {
         </Box>
         
         <Box display="flex" gap={2}>
-          <Button
-            variant="outlined"
-            startIcon={<SaveIcon />}
-            onClick={handleSaveDraft}
-            disabled={loading || confirmState.loading}
-            sx={{ textTransform: 'none' }}
-          >
-            {confirmState.loading ? 'Đang lưu...' : 'Lưu tạm'}
-          </Button>
+          
           <Button
             variant="contained"
             startIcon={<SendIcon />}
@@ -617,11 +609,7 @@ function ImportOrder() {
                   {currentImportOrder.items.map((item, index) => (
                     <TableRow 
                       key={`${item.productId}-${index}`}
-                      sx={{
-                        backgroundColor: (item.quantity <= 0 || item.unitPrice <= 0) 
-                          ? 'error.light' 
-                          : 'transparent'
-                      }}
+                      
                     >
                       <TableCell>{index + 1}</TableCell>
                       <TableCell>
