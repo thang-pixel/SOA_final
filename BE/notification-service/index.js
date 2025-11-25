@@ -6,6 +6,7 @@ const cors = require('cors');
 const amqp = require('amqplib');
 const Imap = require('imap');
 const { simpleParser } = require('mailparser');
+const crypto = require('crypto');
 const app = express();
 
 app.use(express.json());
@@ -18,15 +19,21 @@ app.use(cors({
 mongoose.connect(process.env.MONGO_URI, { 
     useNewUrlParser: true, 
     useUnifiedTopology: true
-}).then(() => console.log('MongoDB connected'))
-    .catch(err => console.log(err));
+}).then(async () => {
+    console.log('✅ MongoDB connected');
+    // Khởi động services sau khi MongoDB đã connect
+    await startServices();
+}).catch(err => {
+    console.log('❌ MongoDB connection error:', err);
+    process.exit(1);
+});
 
 // Schema cho notifications
 const notificationSchema = new mongoose.Schema({
   title: { type: String, required: true },
   message: { type: String, required: true },
   type: { type: String, enum: ['info', 'success', 'warning', 'error'], default: 'info' },
-  userId: { type: String }, // Có thể để trống cho notification chung
+  userId: { type: String },
   isRead: { type: Boolean, default: false },
   relatedOrderId: { type: String },
   createdAt: { type: Date, default: Date.now },
@@ -56,13 +63,19 @@ const imapConfig = {
   }
 };
 
+// RabbitMQ connection
 let rabbitConnection;
 let rabbitChannel;
 
+// Leader election variables
+let isLeader = false;
+let leadershipInterval;
+let emailMonitoringInterval;
+let currentLeaderId = process.env.HOSTNAME || `notification-${process.pid}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-
-
-
+// Email monitoring variables
+let isChecking = false;
+let imap = null;
 
 // Kết nối RabbitMQ
 async function connectRabbitMQ(retryCount = 0) {
@@ -102,16 +115,186 @@ async function connectRabbitMQ(retryCount = 0) {
       }
     });
     
-    console.log('Connected to RabbitMQ');
+    console.log('✅ Connected to RabbitMQ');
   } catch (error) {
-      console.error('Failed to connect to RabbitMQ:', error);
-      // Tự động retry sau 5 giây, tối đa 20 lần
+      console.error('❌ Failed to connect to RabbitMQ:', error);
       if (retryCount < 20) {
         setTimeout(() => connectRabbitMQ(retryCount + 1), 5000);
       } else {
         console.error('RabbitMQ connection failed after multiple retries.');
       }
     }
+}
+
+// Function để clear expired leaders
+async function clearExpiredLeaders() {
+  try {
+    const now = new Date();
+    const result = await mongoose.connection.db.collection('leader_election').deleteMany({
+      service: 'email_monitoring',
+      ttl: { $lt: now }
+    });
+    
+    if (result.deletedCount > 0) {
+      console.log(` [${currentLeaderId}] Cleared ${result.deletedCount} expired leader records`);
+    }
+  } catch (error) {
+    console.error('Error clearing expired leaders:', error);
+  }
+}
+
+// Leader election với logic chặt chẽ hơn
+async function electLeader() {
+  try {
+    const now = new Date();
+    const ttl = new Date(now.getTime() + 30000); // TTL 30 giây
+    
+    // Bước 1: Kiểm tra xem có leader hiện tại không
+    const currentLeaderDoc = await mongoose.connection.db.collection('leader_election').findOne({
+      service: 'email_monitoring'
+    });
+    
+    const wasLeader = isLeader;
+    
+    // Bước 2: Nếu có leader và chưa expire, check xem có phải tôi không
+    if (currentLeaderDoc && currentLeaderDoc.ttl > now) {
+      if (currentLeaderDoc.leaderId === currentLeaderId) {
+        // Tôi là leader hiện tại, gia hạn
+        try {
+          const result = await mongoose.connection.db.collection('leader_election').findOneAndUpdate(
+            {
+              service: 'email_monitoring',
+              leaderId: currentLeaderId
+            },
+            {
+              $set: {
+                lastHeartbeat: now,
+                ttl: ttl
+              }
+            },
+            { returnDocument: 'after' }
+          );
+          
+          isLeader = !!result.value;
+          if (isLeader) {
+            console.log(`✅ [${currentLeaderId}] Maintaining leadership`);
+          }
+        } catch (error) {
+          console.error('Error maintaining leadership:', error);
+          isLeader = false;
+        }
+      } else {
+        // Có leader khác và còn valid
+        isLeader = false;
+        if (wasLeader) {
+          console.log(`🟡 [${currentLeaderId}] Lost leadership to ${currentLeaderDoc.leaderId}`);
+          stopEmailMonitoring();
+        }
+      }
+      return;
+    }
+    
+    // Bước 3: Không có leader hoặc leader đã expire, cố gắng trở thành leader
+    try {
+      const result = await mongoose.connection.db.collection('leader_election').findOneAndUpdate(
+        {
+          service: 'email_monitoring',
+          $or: [
+            { ttl: { $lt: now } }, // Leader cũ đã expire
+            { leaderId: { $exists: false } }, // Chưa có leader
+            { leaderId: null } // Leader null
+          ]
+        },
+        {
+          $set: {
+            service: 'email_monitoring',
+            leaderId: currentLeaderId,
+            lastHeartbeat: now,
+            ttl: ttl
+          }
+        },
+        {
+          upsert: true,
+          returnDocument: 'after'
+        }
+      );
+      
+      // Kiểm tra kết quả có thật sự thành công không
+      if (result.value && result.value.leaderId === currentLeaderId) {
+        isLeader = true;
+        if (!wasLeader) {
+          console.log(` [${currentLeaderId}] Became email monitoring leader`);
+          startEmailMonitoring();
+        }
+      } else {
+        // Có container khác đã trở thành leader trước
+        isLeader = false;
+        if (wasLeader) {
+          console.log(`🟡 [${currentLeaderId}] Lost leadership race`);
+          stopEmailMonitoring();
+        }
+      }
+      
+    } catch (updateError) {
+      // Nếu có lỗi (có thể do race condition), không được làm leader
+      isLeader = false;
+      if (wasLeader) {
+        console.log(` [${currentLeaderId}] Lost leadership due to update error`);
+        stopEmailMonitoring();
+      }
+    }
+    
+  } catch (error) {
+    console.error('Leader election error:', error);
+    if (isLeader) {
+      console.log(` [${currentLeaderId}] Lost leadership due to error`);
+      isLeader = false;
+      stopEmailMonitoring();
+    }
+  }
+}
+
+// Khởi động leader election
+async function startLeaderElection() {
+  try {
+    // Tạo TTL index cho leader election collection
+    await mongoose.connection.db.collection('leader_election').createIndex(
+      { "ttl": 1 }, 
+      { expireAfterSeconds: 0 }
+    );
+    
+    console.log(` [${currentLeaderId}] Starting leader election...`);
+    
+    // Clear expired leaders trước khi bắt đầu
+    await clearExpiredLeaders();
+    
+    // Random delay để tránh race condition
+    const randomDelay = Math.random() * 3000; // 0-3 giây
+    console.log(` [${currentLeaderId}] Waiting ${Math.round(randomDelay)}ms before election...`);
+    await new Promise(resolve => setTimeout(resolve, randomDelay));
+    
+    // Election sau delay
+    await electLeader();
+    
+    // Heartbeat mỗi 15 giây + cleanup expired leaders
+    leadershipInterval = setInterval(async () => {
+      await clearExpiredLeaders(); // Cleanup trước
+      await electLeader(); // Sau đó election
+    }, 15000);
+    
+  } catch (error) {
+    console.error('Error starting leader election:', error);
+  }
+}
+
+// Dừng leader election
+function stopLeaderElection() {
+  if (leadershipInterval) {
+    clearInterval(leadershipInterval);
+    leadershipInterval = null;
+  }
+  isLeader = false;
+  stopEmailMonitoring();
 }
 
 // Gửi email đến nhà cung cấp
@@ -130,8 +313,7 @@ async function sendOrderEmail(emailData) {
       </tr>
     `).join('');
     
-    const currentDate = new Date().toLocaleDateString('vi-VN');
-    const deliveryDate = new Date(Date.now() + 24*60*60*1000).toLocaleDateString('vi-VN'); // +1 ngày
+    const deliveryDate = new Date(Date.now() + 24*60*60*1000).toLocaleDateString('vi-VN');
     
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
@@ -189,7 +371,7 @@ async function sendOrderEmail(emailData) {
     };
     
     await emailTransporter.sendMail(mailOptions);
-    console.log(`Email sent successfully for order ${order.orderCode}`);
+    console.log(` Email sent successfully for order ${order.orderCode}`);
     
     // Tạo notification thành công
     await createNotification({
@@ -201,7 +383,7 @@ async function sendOrderEmail(emailData) {
     });
     
   } catch (error) {
-    console.error('Error sending email:', error);
+    console.error(' Error sending email:', error);
     // Tạo notification lỗi
     await createNotification({
       title: 'Lỗi gửi email',
@@ -217,207 +399,233 @@ async function createNotification(data) {
   try {
     const notification = new Notification(data);
     await notification.save();
-    console.log('Notification created:', data.title);
+    console.log(' Notification created:', data.title);
   } catch (error) {
-    console.error('Error creating notification:', error);
+    console.error(' Error creating notification:', error);
   }
 }
 
-// Check email định kỳ
-// Check email định kỳ
-function startEmailMonitoring() {
-  let isChecking = false;
-  let imap = null;
-  
-  function cleanup() {
-    if (imap) {
+// Cleanup IMAP connection
+function cleanupImap() {
+  if (imap) {
+    try {
       imap.removeAllListeners();
       if (imap.state !== 'disconnected') {
         imap.end();
       }
+    } catch (error) {
+      console.error('Error during IMAP cleanup:', error);
+    } finally {
       imap = null;
     }
   }
+}
+
+// Check emails function
+function checkEmails() {
+  // Kiểm tra leadership trước khi xử lý
+  if (!isLeader) {
+    console.log(' Not leader, skipping email check');
+    return;
+  }
+
+  if (isChecking) {
+    console.log(' Already checking emails, skipping...');
+    return;
+  }
   
-  function checkEmails() {
-    if (isChecking) {
-      console.log('Already checking emails, skipping...');
-      return;
-    }
+  isChecking = true;
+  cleanupImap();
+  
+  imap = new Imap(imapConfig);
+  imap.setMaxListeners(20);
+  
+  function openInbox(cb) {
+    imap.openBox('INBOX', false, cb);
+  }
+  
+  imap.once('ready', function() {
+    console.log(' IMAP connection ready');
     
-    isChecking = true;
-    cleanup(); // Cleanup trước khi tạo connection mới
-    
-    imap = new Imap(imapConfig);
-    
-    // Set max listeners để tránh warning
-    imap.setMaxListeners(20);
-    
-    function openInbox(cb) {
-      imap.openBox('INBOX', false, cb);
-    }
-    
-    imap.once('ready', function() {
-      openInbox(function(err, box) {
+    openInbox(function(err, box) {
+      if (err) {
+        console.error(' Error opening inbox:', err);
+        cleanupImap();
+        isChecking = false;
+        return;
+      }
+      
+      // Kiểm tra leadership một lần nữa
+      if (!isLeader) {
+        console.log(' Lost leadership during email check');
+        cleanupImap();
+        isChecking = false;
+        return;
+      }
+      
+      // Tìm email mới trong 5 phút qua
+      const since = new Date();
+      since.setMinutes(since.getMinutes() - 5);
+      
+      imap.search([
+        'UNSEEN', 
+        ['SINCE', since],
+        ['FROM', 'phannguyenquocthang311205@gmail.com']
+      ], function(err, results) {
         if (err) {
-          console.error('Error opening inbox:', err);
-          cleanup();
+          console.error(' Search error:', err);
+          cleanupImap();
           isChecking = false;
           return;
         }
         
-        // Tìm email mới trong 5 phút qua (tăng thời gian để tránh lặp)
-        const since = new Date();
-        since.setMinutes(since.getMinutes() - 5);
+        if (!results || results.length === 0) {
+          console.log(' No new emails found');
+          cleanupImap();
+          isChecking = false;
+          return;
+        }
         
-        // Chỉ tìm email chưa đọc từ supplier cụ thể
-        imap.search([
-          'UNSEEN', 
-          ['SINCE', since],
-          ['FROM', 'phannguyenquocthang311205@gmail.com']
-        ], function(err, results) {
-          if (err) {
-            console.error('Search error:', err);
-            cleanup();
-            isChecking = false;
-            return;
-          }
-          
-          if (!results || results.length === 0) {
-            cleanup();
-            isChecking = false;
-            return;
-          }
-          
-          console.log(`Found ${results.length} new emails from supplier`);
-          
-          const f = imap.fetch(results, { 
-            bodies: '',
-            markSeen: true // Tự động đánh dấu đã đọc
-          });
-          
-          let processed = 0;
-          
-          f.on('message', function(msg, seqno) {
-            msg.on('body', function(stream, info) {
-              simpleParser(stream, async (err, parsed) => {
-                if (err) {
-                  console.error('Parse error:', err);
-                  return;
-                }
+        console.log(` Found ${results.length} new emails from supplier`);
+        
+        const f = imap.fetch(results, { 
+          bodies: '',
+          markSeen: true
+        });
+        
+        let processed = 0;
+        
+        f.on('message', function(msg, seqno) {
+          msg.on('body', function(stream, info) {
+            simpleParser(stream, async (err, parsed) => {
+              if (err) {
+                console.error(' Parse error:', err);
+                return;
+              }
 
-                try {
-                  // Kiểm tra xem notification này đã tồn tại chưa để tránh duplicate
-                  const existingNotification = await Notification.findOne({
-                    'metadata.subject': parsed.subject,
-                    'metadata.from': parsed.from.text,
-                    createdAt: { $gte: since }
+              try {
+                // Tạo hash từ nội dung email để identify unique content
+                const emailContent = `${parsed.subject || ''} ${parsed.text || ''}`.trim();
+                const contentHash = crypto.createHash('md5').update(emailContent).digest('hex');
+                
+                // Kiểm tra duplicate dựa trên HASH của nội dung thay vì subject
+                const existingNotification = await Notification.findOne({
+                  'metadata.contentHash': contentHash,
+                  'metadata.from': parsed.from.text,
+                  createdAt: { $gte: since }
+                });
+                
+                if (!existingNotification) {
+                  // Extract order code
+                  const extractOrderCode = (subject, text) => {
+                    const pattern = /NH\d{13,}/;
+                    const match = (subject || '').match(pattern) || (text || '').match(pattern);
+                    return match ? match[0] : null;
+                  };
+
+                  const orderCode = extractOrderCode(parsed.subject, parsed.text);
+                  
+                  await createNotification({
+                    title: 'Phản hồi từ nhà cung cấp',
+                    message: `Nhà cung cấp đã phản hồi: ${parsed.subject}`,
+                    type: 'info',
+                    relatedOrderId: orderCode,
+                    metadata: { 
+                      subject: parsed.subject,
+                      from: parsed.from.text,
+                      snippet: parsed.text ? parsed.text.substring(0, 100) + '...' : '',
+                      emailId: `${parsed.messageId || seqno}_${Date.now()}`,
+                      orderCode: orderCode,
+                      supplierEmail: true,
+                      contentHash: contentHash, // Lưu hash để check duplicate
+                      receivedAt: new Date().toISOString() // Timestamp khi nhận
+                    }
                   });
                   
-                  if (!existingNotification) {
-                    // Extract order code từ subject hoặc nội dung email
-                    const extractOrderCode = (subject, text) => {
-                      // Tìm mã NHxxxxxxxxxxxxx trong subject hoặc text
-                      const pattern = /NH\d{13,}/;
-                      const match = (subject || '').match(pattern) || (text || '').match(pattern);
-                      if (match) {
-                        return match[0]; // Trả về mã đơn hàng, ví dụ: NH1764061832856
-                      }
-                      return null;
-                    };
-
-                    const orderCode = extractOrderCode(parsed.subject, parsed.text);
-                    
-                    await createNotification({
-                      title: 'Phản hồi từ nhà cung cấp',
-                      message: `Nhà cung cấp đã phản hồi: ${parsed.subject}`,
-                      type: 'info',
-                      relatedOrderId: orderCode, // Thêm orderCode vào đây
-                      metadata: { 
-                        subject: parsed.subject,
-                        from: parsed.from.text,
-                        snippet: parsed.text ? parsed.text.substring(0, 100) + '...' : '',
-                        emailId: `${parsed.messageId || seqno}_${Date.now()}`,
-                        orderCode: orderCode, // Lưu orderCode trong metadata
-                        supplierEmail: true // Đánh dấu đây là email từ supplier
-                      }
-                    });
-                    console.log('New notification created for email:', parsed.subject, 'OrderCode:', orderCode);
-                  } else {
-                    console.log('Duplicate email notification skipped:', parsed.subject);
-                  }
-                } catch (error) {
-                  console.error('Error processing email:', error);
+                  console.log(` New notification created for email: ${parsed.subject}, OrderCode: ${orderCode}`);
+                } else {
+                  console.log(' Duplicate email content skipped:', parsed.subject);
                 }
-                
-                processed++;
-              });
-            });
-            
-            msg.once('end', function() {
-              console.log(`Processed email ${processed}/${results.length}`);
+              } catch (error) {
+                console.error(' Error processing email:', error);
+              }
+              
+              processed++;
             });
           });
           
-          f.once('error', function(err) {
-            console.error('Fetch error:', err);
-            cleanup();
-            isChecking = false;
+          msg.once('end', function() {
+            console.log(` Processed email ${processed}/${results.length}`);
           });
-          
-          f.once('end', function() {
-            console.log('Finished processing all emails');
-            cleanup();
-            isChecking = false;
-          });
+        });
+        
+        f.once('error', function(err) {
+          console.error(' Fetch error:', err);
+          cleanupImap();
+          isChecking = false;
+        });
+        
+        f.once('end', function() {
+          console.log('Finished processing all emails');
+          cleanupImap();
+          isChecking = false;
         });
       });
     });
-    
-    imap.once('error', function(err) {
-      console.error('IMAP error:', err);
-      cleanup();
-      isChecking = false;
-    });
-    
-    imap.once('end', function() {
-      console.log('IMAP connection ended');
-      isChecking = false;
-    });
-    
-    try {
-      imap.connect();
-    } catch (error) {
-      console.error('IMAP connect error:', error);
-      cleanup();
-      isChecking = false;
-    }
+  });
+  
+  imap.once('error', function(err) {
+    console.error(' IMAP error:', err);
+    cleanupImap();
+    isChecking = false;
+  });
+  
+  imap.once('end', function() {
+    console.log(' IMAP connection ended');
+    isChecking = false;
+  });
+  
+  try {
+    imap.connect();
+  } catch (error) {
+    console.error(' IMAP connect error:', error);
+    cleanupImap();
+    isChecking = false;
+  }
+}
+
+// Start email monitoring (chỉ khi là leader)
+function startEmailMonitoring() {
+  if (!isLeader) {
+    console.log(' Not leader, cannot start email monitoring');
+    return;
   }
   
-  // Check email mỗi 30 giây (tăng interval để giảm tải)
-  const emailInterval = setInterval(() => {
-    checkEmails();
-  }, 5000);
+  console.log(` [${currentLeaderId}] Starting email monitoring as leader...`);
   
+  // Check ngay lập tức
+  checkEmails();
   
-  // Cleanup khi process kết thúc
-  process.on('SIGINT', () => {
-    console.log('Cleaning up email monitoring...');
-    clearInterval(emailInterval);
-    cleanup();
-    process.exit(0);
-  });
-  
-  process.on('SIGTERM', () => {
-    console.log('Cleaning up email monitoring...');
-    clearInterval(emailInterval);
-    cleanup();
-    process.exit(0);
-  });
+  // Sau đó check mỗi 30 giây
+  emailMonitoringInterval = setInterval(() => {
+    if (isLeader) {
+      checkEmails();
+    }
+  }, 30000);
 }
-// API endpoints
 
-// Lấy danh sách notifications
+// Stop email monitoring
+function stopEmailMonitoring() {
+  if (emailMonitoringInterval) {
+    console.log(` [${currentLeaderId}] Stopping email monitoring...`);
+    clearInterval(emailMonitoringInterval);
+    emailMonitoringInterval = null;
+  }
+  cleanupImap();
+  isChecking = false;
+}
+
+// API endpoints
 app.get('/notifications', async (req, res) => {
   try {
     const { page = 1, limit = 20, unreadOnly = false } = req.query;
@@ -445,7 +653,6 @@ app.get('/notifications', async (req, res) => {
   }
 });
 
-// Đánh dấu notification đã đọc
 app.put('/notifications/:id/read', async (req, res) => {
   try {
     await Notification.findByIdAndUpdate(req.params.id, { isRead: true });
@@ -455,7 +662,6 @@ app.put('/notifications/:id/read', async (req, res) => {
   }
 });
 
-// Đánh dấu tất cả đã đọc
 app.put('/notifications/mark-all-read', async (req, res) => {
   try {
     await Notification.updateMany({ isRead: false }, { isRead: true });
@@ -465,7 +671,6 @@ app.put('/notifications/mark-all-read', async (req, res) => {
   }
 });
 
-// API để tạo notification từ external service
 app.post('/notifications/create', async (req, res) => {
   try {
     await createNotification(req.body);
@@ -475,7 +680,6 @@ app.post('/notifications/create', async (req, res) => {
   }
 });
 
-// API để gửi email qua queue
 app.post('/send-order-email', async (req, res) => {
   try {
     const { order, supplier } = req.body;
@@ -495,11 +699,55 @@ app.post('/send-order-email', async (req, res) => {
   }
 });
 
-// Khởi tạo services
-connectRabbitMQ();
-startEmailMonitoring();
-
-const PORT = process.env.PORT || 3004;
-app.listen(PORT, () => {
-  console.log(`Notification service running on port ${PORT}`);
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok',
+    leaderId: currentLeaderId,
+    isLeader: isLeader,
+    timestamp: new Date().toISOString()
+  });
 });
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+  console.log(' Received SIGINT, cleaning up...');
+  stopEmailMonitoring();
+  stopLeaderElection();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log(' Received SIGTERM, cleaning up...');
+  stopEmailMonitoring();
+  stopLeaderElection();
+  process.exit(0);
+});
+
+// Khởi tạo services
+async function startServices() {
+  try {
+    await connectRabbitMQ();
+    
+    // Tạo TTL index
+    try {
+      await mongoose.connection.db.collection('leader_election').createIndex(
+        { "ttl": 1 }, 
+        { expireAfterSeconds: 0 }
+      );
+    } catch (indexError) {
+      console.log('TTL Index already exists:', indexError.message);
+    }
+    
+    await startLeaderElection();
+    
+    const PORT = process.env.PORT || 3004;
+    app.listen(PORT, () => {
+      console.log(` Notification service running on port ${PORT}`);
+      console.log(` Instance ID: ${currentLeaderId}`);
+    });
+  } catch (error) {
+    console.error(' Error starting services:', error);
+    process.exit(1);
+  }
+}

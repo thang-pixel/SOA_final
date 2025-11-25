@@ -81,14 +81,15 @@ services:
       - RABBITMQ_URL=amqp://admin:admin123@rabbitmq:5672
       - EMAIL=tenk8595@gmail.com
       - EMAIL_PASSWORD=nhsu elfh hewr cahq
+      - HOSTNAME={{.Node.Hostname}}-{{.Service.Name}}-{{.Task.Slot}}
     networks:
       - soa-network
     depends_on:
       - rabbitmq
     deploy:
-      replicas: 1
+      replicas: 2
       restart_policy:
-        condition: on-failure
+        condition: any
 
 
   # Activity Service
@@ -137,7 +138,10 @@ services:
       - order-service
       - notification-service
       - activity-service
-
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
 
   # Frontend
   frontend:
