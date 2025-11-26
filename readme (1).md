@@ -35,3 +35,5 @@ docker service update --force soa-stack_notification-service
 # Theo dõi quá trình update
 
 watch docker service ps soa-stack_notification-service
+# scale
+docker service scale soa-stack_notification-service=

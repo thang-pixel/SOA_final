@@ -414,34 +414,34 @@ app.put('/import/submit/:id', async (req, res) => {
       supplier: order.supplier
     });
     
-    // // Tự động chuyển sang "delivered" sau 30 giây
-    // setTimeout(async () => {
-    //   try {
-    //     const updatedOrder = await ImportOrder.findById(id);
-    //     if (updatedOrder && updatedOrder.status === 'processing') {
-    //       updatedOrder.status = 'delivered';
-    //       updatedOrder.deliveredAt = new Date();
-    //       await updatedOrder.save();
+    // Tự động chuyển sang "delivered" sau 30 giây
+    setTimeout(async () => {
+      try {
+        const updatedOrder = await ImportOrder.findById(id);
+        if (updatedOrder && updatedOrder.status === 'processing') {
+          updatedOrder.status = 'delivered';
+          updatedOrder.deliveredAt = new Date();
+          await updatedOrder.save();
           
-    //       // Gửi thông báo yêu cầu tạo phiếu nhập kho qua RabbitMQ
-    //       await sendNotificationMessage({
-    //         title: 'Đơn hàng đã được giao',
-    //         message: `Đơn hàng ${updatedOrder.orderCode} đã được giao. Vui lòng tạo phiếu nhập kho.`,
-    //         type: 'warning',
-    //         relatedOrderId: updatedOrder.orderCode,
-    //         metadata: { 
-    //           orderCode: updatedOrder.orderCode,
-    //           supplier: updatedOrder.supplier,
-    //           action: 'create_warehouse_receipt'
-    //         }
-    //       });
+          // Gửi thông báo yêu cầu tạo phiếu nhập kho qua RabbitMQ
+          await sendNotificationMessage({
+            title: 'Đơn hàng đã được giao',
+            message: `Đơn hàng ${updatedOrder.orderCode} đã được giao. Vui lòng tạo phiếu nhập kho.`,
+            type: 'warning',
+            relatedOrderId: updatedOrder.orderCode,
+            metadata: { 
+              orderCode: updatedOrder.orderCode,
+              supplier: updatedOrder.supplier,
+              action: 'create_warehouse_receipt'
+            }
+          });
           
-    //       console.log(`Order ${order.orderCode} delivered automatically`);
-    //     }
-    //   } catch (error) {
-    //     console.error('Error auto-updating order status:', error);
-    //   }
-    // }, 30000); // 30 giây
+          console.log(`Order ${order.orderCode} delivered automatically`);
+        }
+      } catch (error) {
+        console.error('Error auto-updating order status:', error);
+      }
+    }, 30000); // 30 giây
     
     res.json(order);
   } catch (error) {
@@ -562,60 +562,6 @@ process.on('SIGINT', async () => {
     process.exit(1);
   }
 });
-
-
-// API Webhook: Cập nhật trạng thái đơn hàng khi nhận được Email xác nhận (Gọi từ Notification Service)
-app.put('/import/webhook/update-status', async (req, res) => {
-  try {
-    const { orderCode, status, note } = req.body;
-
-    console.log(`Received webhook update for order ${orderCode} to status ${status}`);
-
-    const order = await ImportOrder.findOne({ orderCode });
-    if (!order) {
-      return res.status(404).json({ message: 'Không tìm thấy đơn hàng' });
-    }
-
-    // Chỉ xử lý nếu trạng thái là delivered và đơn hàng đang processing
-    if (status === 'delivered' && order.status === 'processing') {
-      order.status = 'delivered';
-      order.deliveredAt = new Date();
-      // Lưu ghi chú từ email vào notes nếu cần
-      if (note) order.notes = (order.notes || '') + `\n[Email Update]: ${note}`;
-      
-      await order.save();
-
-      // Log hoạt động
-      await logActivity('system_email_bot', 'update_order_status', `Cập nhật trạng thái "Đã giao" qua Email cho đơn ${orderCode}`, {
-        orderCode: order.orderCode,
-        supplier: order.supplier,
-        source: 'email_reply'
-      });
-
-      // Gửi thông báo yêu cầu tạo phiếu nhập kho (Logic cũ mang xuống đây)
-      await sendNotificationMessage({
-        title: 'Hàng đã về (Xác nhận qua Email)',
-        message: `Nhà cung cấp đã xác nhận giao hàng qua Email cho đơn ${order.orderCode}. Vui lòng kiểm tra và tạo phiếu nhập kho.`,
-        type: 'success', // Đổi màu xanh cho phấn khởi
-        relatedOrderId: order.orderCode,
-        metadata: { 
-          orderCode: order.orderCode,
-          supplier: order.supplier,
-          action: 'create_warehouse_receipt'
-        }
-      });
-
-      return res.json({ message: 'Cập nhật thành công', order });
-    }
-
-    return res.status(400).json({ message: 'Trạng thái không hợp lệ hoặc đơn hàng không ở trạng thái processing' });
-
-  } catch (error) {
-    console.error('Error in webhook update:', error);
-    res.status(500).json({ message: 'Lỗi server', error: error.message });
-  }
-});
-
 
 const PORT = process.env.PORT || 3003;
 app.listen(PORT, () => {

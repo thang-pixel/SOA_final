@@ -8,6 +8,7 @@ const Imap = require('imap');
 const { simpleParser } = require('mailparser');
 const crypto = require('crypto');
 const app = express();
+const axios = require('axios'); // Nhớ chạy: npm install axios nếu chưa có
 
 app.use(express.json());
 app.use(cors({
@@ -509,15 +510,42 @@ function checkEmails() {
               }
 
               try {
+                // 1. Lấy nội dung email (Gộp cả tiêu đề và nội dung)
+                const subject = parsed.subject || '';
+                const textBody = parsed.text || '';
+                const fullContent = `${subject} ${textBody}`.toLowerCase(); // Chuyển về chữ thường để so sánh
+
+                // 2. Tìm mã đơn hàng (Regex tìm NHxxxxxxxxxxxxx)
+                const pattern = /NH\d{13,}/;
+                const match = (subject).match(pattern) || (textBody).match(pattern);
+                const orderCode = match ? match[0] : null;
+
+                // 3. Logic phát hiện từ khóa "đã giao" hoặc "delivered"
+                // Chỉ xử lý nếu tìm thấy mã đơn hàng VÀ từ khóa
+                if (orderCode && (fullContent.includes('đã giao') || fullContent.includes('delivered'))) {
+                    console.log(` DETECTED DELIVERY CONFIRMATION for Order: ${orderCode}`);
+
+                    try {
+                        // GỌI SANG ORDER SERVICE ĐỂ CẬP NHẬT TRẠNG THÁI
+                        // Lưu ý: Dùng tên service trong Docker là 'order-service'
+                        await axios.put('http://order-service:3003/import/webhook/update-status', {
+                            orderCode: orderCode,
+                            status: 'delivered',
+                            note: `Email confirm: ${subject}`
+                        });
+                        console.log(` Triggered status update for ${orderCode}`);
+                    } catch (apiError) {
+                        console.error(` Failed to call Order Service: ${apiError.message}`);
+                    }
+                }
                 // Tạo hash từ nội dung email để identify unique content
                 const emailContent = `${parsed.subject || ''} ${parsed.text || ''}`.trim();
                 const contentHash = crypto.createHash('md5').update(emailContent).digest('hex');
                 
-                // Kiểm tra duplicate dựa trên HASH của nội dung thay vì subject
+                // Chỉ sửa một chút ở phần tạo notification để không bị spam nếu đã xử lý update
                 const existingNotification = await Notification.findOne({
-                  'metadata.contentHash': contentHash,
-                  'metadata.from': parsed.from.text,
-                  createdAt: { $gte: since }
+                    'metadata.contentHash': contentHash,
+                    createdAt: { $gte: since }
                 });
                 
                 if (!existingNotification) {

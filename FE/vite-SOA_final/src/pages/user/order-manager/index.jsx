@@ -104,40 +104,40 @@ const OrderTypeChip = React.memo(({ type }) => {
   );
 });
 
-// Component đếm ngược thời gian
-const CountdownTimer = React.memo(({ targetTime, onComplete }) => {
-  const [timeLeft, setTimeLeft] = useState(0);
+// // Component đếm ngược thời gian
+// const CountdownTimer = React.memo(({ targetTime, onComplete }) => {
+//   const [timeLeft, setTimeLeft] = useState(0);
 
-  useEffect(() => {
-    const target = new Date(targetTime).getTime();
+//   useEffect(() => {
+//     const target = new Date(targetTime).getTime();
     
-    const timer = setInterval(() => {
-      const now = new Date().getTime();
-      const difference = target + 30000 - now; // 30 giây sau thời gian xử lý
+//     const timer = setInterval(() => {
+//       const now = new Date().getTime();
+//       const difference = target + 30000 - now; // 30 giây sau thời gian xử lý
       
-      if (difference > 0) {
-        setTimeLeft(Math.ceil(difference / 1000));
-      } else {
-        setTimeLeft(0);
-        onComplete?.();
-        clearInterval(timer);
-      }
-    }, 1000);
+//       if (difference > 0) {
+//         setTimeLeft(Math.ceil(difference / 1000));
+//       } else {
+//         setTimeLeft(0);
+//         onComplete?.();
+//         clearInterval(timer);
+//       }
+//     }, 1000);
 
-    return () => clearInterval(timer);
-  }, [targetTime, onComplete]);
+//     return () => clearInterval(timer);
+//   }, [targetTime, onComplete]);
 
-  if (timeLeft <= 0) return null;
+//   if (timeLeft <= 0) return null;
 
-  return (
-    <Box display="flex" alignItems="center" gap={1}>
-      <TimerIcon fontSize="small" color="warning" />
-      <Typography variant="caption" color="warning.main">
-        Còn {timeLeft}s
-      </Typography>
-    </Box>
-  );
-});
+//   return (
+//     <Box display="flex" alignItems="center" gap={1}>
+//       <TimerIcon fontSize="small" color="warning" />
+//       <Typography variant="caption" color="warning.main">
+//         Còn {timeLeft}s
+//       </Typography>
+//     </Box>
+//   );
+// });
 
 // Dialog chi tiết đơn hàng
 const OrderDetailDialog = React.memo(({ open, onClose, order }) => {
@@ -726,11 +726,13 @@ function OrderManager() {
                 </TableCell>
                 <TableCell align="center">
                   <Box display="flex" flexDirection="column" alignItems="center" gap={1}>
-                    {order.status === 'processing' && order.processedAt && (
-                      <CountdownTimer 
-                        targetTime={order.processedAt}
-                        onComplete={handleRefresh}
-                      />
+                    {order.status === 'processing' && (
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <TimerIcon fontSize="small" color="info" sx={{ animation: 'spin 2s linear infinite' }} />
+                        <Typography variant="caption" color="info.main" sx={{ fontStyle: 'italic' }}>
+                          Đang chờ Email phản hồi...
+                        </Typography>
+                      </Box>
                     )}
                     {order.status === 'delivered' && (
                       <Alert severity="info" sx={{ py: 0, px: 1 }}>
@@ -837,11 +839,12 @@ function OrderManager() {
                 Tạo: {formatDate(order.createdAt)}
               </Typography>
 
-              {order.status === 'processing' && order.processedAt && (
-                <CountdownTimer 
-                  targetTime={order.processedAt}
-                  onComplete={handleRefresh}
-                />
+              {order.status === 'processing' && (
+                <Alert severity="info" icon={<TimerIcon />} sx={{ mb: 2, py: 0 }}>
+                  <Typography variant="caption">
+                    Đang chờ nhà cung cấp phản hồi Email để xác nhận giao hàng.
+                  </Typography>
+                </Alert>
               )}
 
               {order.status === 'delivered' && order.type === 'import' && (
