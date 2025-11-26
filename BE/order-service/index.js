@@ -54,7 +54,7 @@ const ImportOrder = mongoose.model('ImportOrder', importOrderSchema);
 // Helper function để log hoạt động
 async function logActivity(username, action, description, metadata = {}) {
   try {
-    await axios.post('http://activity-service:3005/activity/log', {
+    await axios.post('http://localhost:3005/activity/log', {
       username,
       action,
       description,
@@ -302,13 +302,13 @@ async function sendNotificationMessage(notificationData) {
     } else {
       console.error('RabbitMQ channel not available, falling back to direct API call');
       // Fallback: gọi trực tiếp API nếu RabbitMQ không khả dụng
-      await axios.post('http://notification-service:3004/notifications/create', notificationData);
+      await axios.post('http://localhost:3004/notifications/create', notificationData);
     }
   } catch (error) {
     console.error('Error sending notification message:', error);
     // Fallback: gọi trực tiếp API nếu có lỗi
     try {
-      await axios.post('http://notification-service:3004/notifications/create', notificationData);
+      await axios.post('http://localhost:3004/notifications/create', notificationData);
     } catch (apiError) {
       console.error('Error with fallback API call:', apiError);
     }
@@ -328,13 +328,13 @@ async function sendEmailMessage(emailData) {
     } else {
       console.error('RabbitMQ channel not available, falling back to direct API call');
       // Fallback: gọi trực tiếp API nếu RabbitMQ không khả dụng
-      await axios.post('http://notification-service:3004/send-order-email', emailData);
+      await axios.post('http://localhost:3004/send-order-email', emailData);
     }
   } catch (error) {
     console.error('Error sending email message:', error);
     // Fallback: gọi trực tiếp API nếu có lỗi
     try {
-      await axios.post('http://notification-service:3004/send-order-email', emailData);
+      await axios.post('http://localhost:3004/send-order-email', emailData);
     } catch (apiError) {
       console.error('Error with fallback API call:', apiError);
     }
@@ -475,7 +475,7 @@ app.put('/import/create-receipt/:id', async (req, res) => {
         
         // Cập nhật tồn kho trong inventory service
         try {
-          await axios.put(`http://inventory-service:3002/product/update-stock/${actualQty.productId}`, {
+          await axios.put(`http://localhost:3002/product/update-stock/${actualQty.productId}`, {
             quantity: actualQty.actualQuantity,
             operation: 'increase'
           });

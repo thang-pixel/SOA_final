@@ -528,7 +528,7 @@ function checkEmails() {
                     try {
                         // GỌI SANG ORDER SERVICE ĐỂ CẬP NHẬT TRẠNG THÁI
                         // Lưu ý: Dùng tên service trong Docker là 'order-service'
-                        await axios.put('http://order-service:3003/import/webhook/update-status', {
+                        await axios.put('http://localhost:3003/import/webhook/update-status', {
                             orderCode: orderCode,
                             status: 'delivered',
                             note: `Email confirm: ${subject}`

@@ -211,9 +211,9 @@ async function fetchReportData(reportRequest) {
     if (reportType === 'overview') {
       // Lấy dữ liệu tổng quan
       const [importOrders, exportOrders, inventory] = await Promise.all([
-        axios.get('http://order-service:3003/import/list'),
-        axios.get('http://order-service:3003/export/list'),
-        axios.get('http://inventory-service:3002/product/getAll')
+        axios.get('http://localhost:3003/import/list'),
+        axios.get('http://localhost:3003/export/list'),
+        axios.get('http://localhost:3002/product/getAll')
       ]);
       
       const start = new Date(startDate);
@@ -254,7 +254,7 @@ async function fetchReportData(reportRequest) {
         dailyStats: getDailyStats(filteredImports, filteredExports, start, end)
       };
     } else if (reportType === 'import') {
-      const response = await axios.get('http://order-service:3003/import/list');
+      const response = await axios.get('http://localhost:3003/import/list');
       const start = new Date(startDate);
       const end = new Date(endDate);
       
@@ -273,7 +273,7 @@ async function fetchReportData(reportRequest) {
         }
       };
     } else if (reportType === 'export') {
-      const response = await axios.get('http://order-service:3003/export/list');
+      const response = await axios.get('http://localhost:3003/export/list');
       const start = new Date(startDate);
       const end = new Date(endDate);
       
@@ -292,7 +292,7 @@ async function fetchReportData(reportRequest) {
         }
       };
     } else if (reportType === 'inventory') {
-      const response = await axios.get('http://inventory-service:3002/product/getAll');
+      const response = await axios.get('http://localhost:3002/product/getAll');
       return {
         products: response.data,
         summary: {

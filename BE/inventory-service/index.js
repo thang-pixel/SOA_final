@@ -52,7 +52,7 @@ const inventory = mongoose.model('Inventory', inventorySchema);
 // Helper function để log hoạt động
 async function logActivity(username, action, description, metadata = {}) {
   try {
-    await axios.post('http://activity-service:3005/activity/log', {
+    await axios.post('http://localhost:3005/activity/log', {
       username,
       action,
       description,
@@ -188,9 +188,9 @@ app.get('/product/history/:productId', async (req, res) => {
         // Gọi API từ order-service để lấy lịch sử
         const [importHistory, exportHistory] = await Promise.all([
             // Lấy lịch sử nhập hàng
-            axios.get(`http://order-service:3003/import/history/${productId}?page=${page}&limit=${limit}`).catch(() => ({ data: [] })),
+            axios.get(`http://localhost:3003/import/history/${productId}?page=${page}&limit=${limit}`).catch(() => ({ data: [] })),
             // Lấy lịch sử xuất hàng  
-            axios.get(`http://order-service:3003/export/history/${productId}?page=${page}&limit=${limit}`).catch(() => ({ data: [] }))
+            axios.get(`http://localhost:3003/export/history/${productId}?page=${page}&limit=${limit}`).catch(() => ({ data: [] }))
         ]);
 
         // Kết hợp và sắp xếp theo thời gian
@@ -214,7 +214,7 @@ app.get('/product/history/:productId', async (req, res) => {
 async function checkLowStockAndNotify(product) {
   try {
     if (product.stock < product.minStockThreshold) {
-      await axios.post('http://notification-service:3004/notifications/create', {
+      await axios.post('http://localhost:3004/notifications/create', {
         title: '⚠️ Cảnh báo: Tồn kho thấp',
         message: `Sản phẩm "${product.name}" (${product.code}) chỉ còn ${product.stock} sản phẩm, dưới ngưỡng tối thiểu ${product.minStockThreshold}`,
         type: 'warning',
