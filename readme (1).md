@@ -27,5 +27,11 @@ docker stack deploy -c docker-compose.yml soa-stack
 ## kiểm tra scale
 docker service ls
 
-## kiểm tra balancing 
-docker logs <container_id>
+# Xem trạng thái các task của service
+docker service ps soa-stack_notification-service
+
+# Thực hiện rolling update
+docker service update --force soa-stack_notification-service
+# Theo dõi quá trình update
+
+watch docker service ps soa-stack_notification-service

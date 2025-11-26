@@ -178,6 +178,11 @@ async function electLeader() {
           isLeader = !!result.value;
           if (isLeader) {
             console.log(`✅ [${currentLeaderId}] Maintaining leadership`);
+            // Nếu là leader (do ID trùng sau khi restart) mà chưa chạy monitoring -> BẬT LẠI NGAY
+            if (!emailMonitoringInterval) {
+                console.log(`🔄 [${currentLeaderId}] Restoring email monitoring after restart...`);
+                startEmailMonitoring();
+            }
           }
         } catch (error) {
           console.error('Error maintaining leadership:', error);
